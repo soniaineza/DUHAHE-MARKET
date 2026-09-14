@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  --color-leaf-50: #eaf8fc;
+  --color-leaf-100: #d4f0f9;
+  --color-leaf-200: #b3e6f5;
+  --color-leaf-300: #7bd2eb;
+  --color-leaf-400: #35bee3;
+  --color-leaf-500: #00c4f0;
+  --color-leaf-600: #00a9d6;
+  --color-leaf-700: #0091c0;
+  --color-leaf-800: #00739b;
+  --color-leaf-900: #065f83;
+
+  --color-harvest-50: #fff8eb;
+  --color-harvest-100: #ffefc2;
+  --color-harvest-200: #ffd97a;
+  --color-harvest-300: #f7b733;
+  --color-harvest-400: #eaa222;
+  --color-harvest-500: #d97706;
+  --color-harvest-600: #b45309;
+
+  --color-card: #ffffff;
+  --color-bg: #f4f8fb;
+  --color-ink: #10233d;
+  --color-soft: #27394f;
+  --color-muted: #5b6b7f;
+  --color-faint: #93a3b5;
+  --color-line: #e2eaf2;
+
+  --font-display: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+html {
+  font-family: var(--font-display);
+}
+
+body {
+  @apply bg-bg text-ink antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cfe2ef;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.card {
+  @apply bg-white rounded-2xl border border-line shadow-[0_1px_2px_rgba(13,36,20,0.04),0_4px_12px_rgba(13,36,20,0.04)];
+}
+
+.card-sm {
+  @apply bg-white rounded-xl border border-line shadow-[0_1px_2px_rgba(13,36,20,0.04)];
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl bg-leaf-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-leaf-700 disabled:opacity-50;
+}
+
+.btn-ghost {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-leaf-50;
+}

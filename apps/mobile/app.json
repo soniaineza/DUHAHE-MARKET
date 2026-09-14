@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Duhahe Market",
+    "slug": "duhahe-market",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "duhahe",
+    "entryPoint": "index.ts",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#087443"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.duhahe.market"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundColor": "#087443"
+      },
+      "package": "com.duhahe.market"
+    },
+    "extra": {
+      "apiUrl": "http://localhost:4000/api"
+    }
+  }
+}
