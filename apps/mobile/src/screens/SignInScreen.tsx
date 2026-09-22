@@ -59,9 +59,10 @@ export default function SignInScreen() {
       nav.goBack();
     } catch (e) {
       if (code.trim() === '123456') {
-        signIn(demoSession('Duhahe Customer', phone.trim()).token, demoSession('Duhahe Customer', phone.trim()).user);
-        haptic('success');
-        show(t('auth.signedIn'), 'success');
+        const session = demoSession('Duhahe Customer', phone.trim());
+        signIn(session.token, session.user);
+        haptic('warning');
+        show(t('auth.demoOffline', 'Offline demo: signed in without a server account'), 'info');
         nav.goBack();
       } else {
         setError(e instanceof Error ? e.message : t('auth.invalidCode'));

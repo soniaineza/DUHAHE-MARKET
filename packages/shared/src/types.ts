@@ -68,6 +68,8 @@ export interface Order {
   status: OrderStatus;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
+  /** Reference returned by the payment gateway (stub or provider). */
+  providerReference?: string;
   createdAt: string;
   note?: string;
   tracking?: { updatedAt: string; note: string }[];

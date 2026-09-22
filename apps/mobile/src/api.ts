@@ -2,16 +2,17 @@ import Constants from 'expo-constants';
 import type { CategoryId, Language, Order, PaymentResult, Product } from '@duhahe/shared';
 
 const API_PORT = 4000;
+const PRODUCTION_API_URL = 'https://duhahe-api.onrender.com/api';
 
 function resolveBaseUrl(): string {
   const explicit = process.env.EXPO_PUBLIC_API_URL;
-  if (explicit) return explicit.replace(/\/$/, '');
+  if (explicit) return explicit.trim().replace(/\/+$/, '');
   const hostUri = Constants.expoConfig?.hostUri;
   if (hostUri) {
-    const host = hostUri.split(':')[0];
+    const host = hostUri.trim().split(':')[0];
     return `http://${host}:${API_PORT}/api`;
   }
-  return `http://localhost:${API_PORT}/api`;
+  return PRODUCTION_API_URL;
 }
 
 export const BASE_URL = resolveBaseUrl();
@@ -39,6 +40,19 @@ async function authGet<T>(path: string, token: string): Promise<T> {
 async function post<T>(path: string, payload: unknown): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json();
+  if (!res.ok || body.error) {
+    throw new Error(body.error ?? `Request failed (${res.status})`);
+  }
+  return body.data as T;
+}
+
+async function put<T>(path: string, payload: unknown): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
@@ -155,4 +169,20 @@ export const addressApi = {
     post<SavedAddress>('/addresses', payload),
   remove: (id: string) => del<SavedAddress>(`/addresses/${id}`),
   setDefault: (phone: string, id: string) => post<SavedAddress>(`/addresses/${id}/default`, { phone }),
+};
+
+export interface ServerCartLine {
+  productId: string;
+  qty: number;
+}
+
+export const cartApi = {
+  get: (phone: string) => get<{ items: ServerCartLine[] }>(`/cart?phone=${encodeURIComponent(phone)}`),
+  save: (phone: string, items: ServerCartLine[]) => put<{ items: ServerCartLine[] }>('/cart', { phone, items }),
+};
+
+export const favoritesApi = {
+  get: (phone: string) => get<{ ids: string[] }>(`/favorites?phone=${encodeURIComponent(phone)}`),
+  save: (phone: string, ids: string[]) => put<{ ids: string[] }>('/favorites', { phone, ids }),
+  toggle: (phone: string, productId: string) => post<{ ids: string[] }>('/favorites/toggle', { phone, productId }),
 };

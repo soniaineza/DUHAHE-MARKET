@@ -16,7 +16,7 @@ export default function LogoMark({ size = 'md', dark = false, showWordmark = tru
   return (
     <View style={styles.row}>
       <LinearGradient
-        colors={dark ? ['#23813f', '#144523'] : ['#2e9e4f', '#1d6a35']}
+        colors={dark ? ['#000000', '#111111'] : ['#111111', '#000000']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.tile, { width: px, height: px, borderRadius: px * 0.28 }]}
@@ -35,7 +35,7 @@ export default function LogoMark({ size = 'md', dark = false, showWordmark = tru
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  tile: { alignItems: 'center', justifyContent: 'center', shadowColor: '#0d2414', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 5 },
+  tile: { alignItems: 'center', justifyContent: 'center', shadowColor: '#111111', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 5 },
   wordWrap: {},
   word: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5, color: colors.ink },
   wordDark: { color: colors.white },

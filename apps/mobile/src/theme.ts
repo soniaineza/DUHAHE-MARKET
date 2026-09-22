@@ -3,57 +3,57 @@
 // ---------------------------------------------------------------------------
 
 export const colors = {
-  // Brand greens (primary actions, active states, headers)
-  primary: '#087443',
-  primaryDark: '#06602F',
-  primaryDeep: '#064F2A',
-  secondary: '#0B8F55',
-  primarySoft: '#E5F3EC',
-  primaryLine: '#CBE7D8',
+  // Brand accent — deep black (per redesign: cream canvas, black accents)
+  primary: '#111111',
+  primaryDark: '#000000',
+  primaryDeep: '#111111',
+  secondary: '#111111',
+  primarySoft: '#EFEAD9',
+  primaryLine: '#DDD6C3',
 
   // Accent yellow (badges, offers, highlights, selected states)
   accent: '#F4B942',
-  accentDark: '#DB9F2B',
+  accentDark: '#B97F14',
   accentSoft: '#FDF3D9',
 
-  // Legacy aliases — map onto the green brand; removed during screen migration
-  accentDeep: '#064F2A',
-  accentLine: '#CBE7D8',
+  // Legacy aliases — map onto the black brand; removed during screen migration
+  accentDeep: '#111111',
+  accentLine: '#DDD6C3',
 
-  // Neutrals (Warm paper background, ink text)
-  bg: '#F7F8F6',
+  // Neutrals (Warm cream background, black ink text)
+  bg: '#F7F4EC',
   surface: '#FFFFFF',
   card: '#FFFFFF',
-  chip: '#EFF1EF',
-  subtle: '#EFF1EF',
-  ink: '#171A18',
-  inkSoft: '#2B302C',
-  muted: '#6B716C',
-  faint: '#9BA19C',
-  border: '#E4E7E3',
-  divider: '#EDEFEB',
+  chip: '#EDE8DA',
+  subtle: '#EDE8DA',
+  ink: '#111111',
+  inkSoft: '#2A2822',
+  muted: '#77736B',
+  faint: '#A39E92',
+  border: '#E5E0D3',
+  divider: '#EDE8DA',
 
   // Semantic
-  success: '#16804A',
-  successSoft: '#E6F2EC',
+  success: '#B45309',
+  successSoft: '#FDF3D9',
   warn: '#DB9F2B',
   warnSoft: '#FDF3D9',
-  danger: '#D64545',
+  danger: '#C2410C',
   dangerSoft: '#FBE9E7',
-  info: '#087443',
-  infoSoft: '#E5F3EC',
+  info: '#111111',
+  infoSoft: '#EFEAD9',
 
-  // Green scale (legacy alias kept for stepwise migration)
-  leaf50: '#E9F6EF',
-  leaf100: '#D3EDDF',
-  leaf200: '#A8DCC0',
-  leaf300: '#6FC39B',
-  leaf400: '#3CA977',
-  leaf500: '#1E955F',
-  leaf600: '#0B8F55',
-  leaf700: '#087443',
-  leaf800: '#06602F',
-  leaf900: '#054725',
+  // Legacy "leaf" scale — remapped to warm neutrals/black (no green anywhere)
+  leaf50: '#EDE8DA',
+  leaf100: '#DDD6C3',
+  leaf200: '#C9C1AA',
+  leaf300: '#A39E92',
+  leaf400: '#77736B',
+  leaf500: '#44403C',
+  leaf600: '#2A2822',
+  leaf700: '#111111',
+  leaf800: '#000000',
+  leaf900: '#000000',
 
   // Yellow scale (legacy alias kept for stepwise migration)
   harvest50: '#FEF5DC',
@@ -72,9 +72,9 @@ export const colors = {
 
   white: '#FFFFFF',
 
-  // DEPRECATED gradient stops — removed in later phases (no gradients in spec)
-  accentGrad1: '#0B8F55',
-  accentGrad2: '#087443',
+  // DEPRECATED gradient stops — kept for legacy components (black accent stops)
+  accentGrad1: '#111111',
+  accentGrad2: '#000000',
 } as const;
 
 export const radii = {
@@ -119,7 +119,7 @@ export const fonts = {
 // Card / sheet shadows — subtle, low elevation (spec: no excessive shadow)
 export const shadow = {
   sm: {
-    shadowColor: '#171A18',
+    shadowColor: '#111111',
     shadowOpacity: 0.05,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
@@ -141,8 +141,8 @@ export const shadow = {
   },
 } as const;
 
-// DEPRECATED — keep for legacy components; removed during screen migration
-export const gradientHero = ['#0B8F55', '#087443', '#065931'] as const;
-export const gradientAccent = ['#0B8F55', '#087443'] as const;
-export const gradientAccentSolid = ['#0B8F55', '#087443'] as const;
-export const gradientCard = ['#f3f8f5', '#e9f6ef'] as const;
+// DEPRECATED — kept for legacy components; solid black ramps now (no gradients in spirit, monochrome stops)
+export const gradientHero = ['#111111', '#111111', '#111111'] as const;
+export const gradientAccent = ['#111111', '#111111'] as const;
+export const gradientAccentSolid = ['#111111', '#111111'] as const;
+export const gradientCard = ['#F7F4EC', '#EFEAD9'] as const;

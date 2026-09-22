@@ -210,7 +210,7 @@ export default function Orders() {
                       </button>
                     ) : null}
                     {o.status === 'delivered' && (
-                      <div className="rounded-lg bg-green-50 text-green-700 py-2.5 text-sm text-center font-bold">
+                      <div className="rounded-lg bg-leaf-50 text-ink py-2.5 text-sm text-center font-bold">
                         {t('delivered')} ✓
                       </div>
                     )}

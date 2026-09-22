@@ -70,7 +70,7 @@ export default function AccountScreen() {
           <MenuItem icon="heart-outline" label={t('profileMenu.favorites')} onPress={() => nav.navigate('Favorites')} />
           <MenuItem icon="credit-card-outline" label={t('profileMenu.payments')} onPress={() => notifySoon(t('payment.thisIsDemo'))} />
           <MenuItem icon="translate" label={t('profileMenu.language')} onPress={() => setLangOpen((v) => !v)} open={langOpen} />
-          <MenuItem icon="information-outline" label={t('profileMenu.about')} onPress={() => notifySoon('Duhahe Market · v0.1 · Fresh from 100+ local farmers')} />
+          <MenuItem icon="information-outline" label={t('profileMenu.about')} onPress={() => { haptic('light'); nav.navigate('About'); }} />
           {signedIn && (
             <View style={styles.logoutRow}>
               <Icon name="logout" size={19} color={colors.danger} />

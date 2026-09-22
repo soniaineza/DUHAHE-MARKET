@@ -24,17 +24,34 @@ export default function OrderDetail() {
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [payment, setPayment] = useState<{ paymentMethod: string; paymentStatus: string; providerReference?: string; total: number } | null>(null);
 
   const load = useCallback(() => {
     if (!id) return;
     api.order(id)
       .then((res) => setOrder(res.data))
       .catch((e) => setError(e.message));
+    api.orderPayment(id)
+      .then((res) => setPayment(res.data))
+      .catch(() => {});
   }, [id]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const setPaymentStatus = async (paymentStatus: 'paid' | 'refunded') => {
+    if (!order || busy) return;
+    setBusy(true);
+    try {
+      await api.updateOrderPayment(order.id, paymentStatus);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update payment');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const advance = async (to: OrderStatus) => {
     if (!order || busy) return;
@@ -64,8 +81,8 @@ export default function OrderDetail() {
   const statusMeta: Record<OrderStatus, { label: string; chip: string }> = {
     pending: { label: 'Pending', chip: 'bg-amber-50 text-amber-700 border-amber-200' },
     packing: { label: 'Packing', chip: 'bg-blue-50 text-blue-700 border-blue-200' },
-    in_transit: { label: 'In Transit', chip: 'bg-violet-50 text-violet-700 border-violet-200' },
-    delivered: { label: 'Delivered', chip: 'bg-green-50 text-green-700 border-green-200' },
+    in_transit: { label: 'In Transit', chip: 'bg-cyan-50 text-cyan-800 border-cyan-200' },
+    delivered: { label: 'Delivered', chip: 'bg-leaf-50 text-ink border-leaf-200' },
     cancelled: { label: 'Cancelled', chip: 'bg-gray-100 text-gray-600 border-gray-200' },
   };
 
@@ -141,7 +158,7 @@ export default function OrderDetail() {
       )}
 
       {st === 'delivered' && (
-        <div className="rounded-lg bg-green-50 text-green-700 py-3 text-sm text-center font-bold">{t('delivered')} ✓</div>
+        <div className="rounded-lg bg-leaf-50 text-ink py-3 text-sm text-center font-bold">{t('delivered')} ✓</div>
       )}
 
       <div className="card p-5">
@@ -222,6 +239,59 @@ export default function OrderDetail() {
             {t('callCustomer')}
           </a>
         </div>
+      </div>
+
+      <div className="card p-5">
+        <h2 className="font-bold text-soft mb-3">{t('paymentAdmin')}</h2>
+        {payment ? (
+          <dl className="grid md:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            <div>
+              <dt className="text-faint text-xs font-bold uppercase">{t('paymentLabel')} ({t('total')})</dt>
+              <dd className="font-bold capitalize">{payment.paymentMethod.replace(/_/g, ' ')} · {fmtRWF(payment.total)}</dd>
+            </div>
+            <div>
+              <dt className="text-faint text-xs font-bold uppercase">{t('paymentLabel')} status</dt>
+              <dd>
+                <span className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-bold capitalize ${
+                  payment.paymentStatus === 'paid' ? 'border-leaf-200 bg-leaf-50 text-ink' :
+                  payment.paymentStatus === 'refunded' ? 'border-gray-200 bg-gray-50 text-gray-600' :
+                  payment.paymentStatus === 'failed' ? 'border-red-100 bg-red-50 text-red-600' :
+                  'border-amber-100 bg-amber-50 text-amber-700'
+                }`}>
+                  {payment.paymentStatus}
+                </span>
+              </dd>
+            </div>
+            <div className="md:col-span-2">
+              <dt className="text-faint text-xs font-bold uppercase">{t('providerRef')}</dt>
+              <dd className="font-mono text-xs">{payment.providerReference ?? t('noRef')}</dd>
+            </div>
+          </dl>
+        ) : (
+          <div className="h-10 animate-pulse rounded-lg bg-leaf-50" />
+        )}
+        {order && order.status !== 'cancelled' && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {order.paymentStatus !== 'paid' && (
+              <button
+                onClick={() => setPaymentStatus('paid')}
+                disabled={busy}
+                className="inline-flex justify-center rounded-xl bg-leaf-600 px-4 py-2 text-sm font-bold text-white hover:bg-leaf-700 transition disabled:opacity-60"
+              >
+                {t('markPaid')}
+              </button>
+            )}
+            {order.paymentStatus === 'paid' && (
+              <button
+                onClick={() => setPaymentStatus('refunded')}
+                disabled={busy}
+                className="inline-flex justify-center rounded-xl border border-line px-4 py-2 text-sm font-semibold text-muted hover:bg-gray-100 transition disabled:opacity-60"
+              >
+                {t('markRefunded')}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="text-xs text-faint">{t('statusLabel', 'Status')}: {t(`status.${st}`, statusMeta[st].label)} · ID: {order.id}</div>

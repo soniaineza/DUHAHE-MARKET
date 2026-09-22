@@ -3,12 +3,15 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import type { Order } from '@duhahe/shared';
 import Icon, { type IconName } from '../components/Icon';
 import HomeScreen from '../screens/HomeScreen';
 import CategoriesScreen from '../screens/CategoriesScreen';
 import CartScreen from '../screens/CartScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
 import CheckoutSuccessScreen from '../screens/CheckoutSuccessScreen';
+import DemoPaymentScreen from '../screens/DemoPaymentScreen';
+import AboutScreen from '../screens/AboutScreen';
 import OrderTrackingScreen from '../screens/OrderTrackingScreen';
 import OrdersScreen from '../screens/OrdersScreen';
 import CategoryScreen from '../screens/CategoryScreen';
@@ -21,7 +24,6 @@ import AddressesScreen from '../screens/AddressesScreen';
 import AccountScreen from '../screens/AccountScreen';
 import FavoritesScreen from '../screens/FavoritesScreen';
 import { useCart } from '../context/CartContext';
-import { useApp } from '../context/AppContext';
 import { colors, radii } from '../theme';
 
 export type TabParamList = {
@@ -39,6 +41,8 @@ export type RootStackParamList = {
   Search: { q?: string } | undefined;
   Checkout: undefined;
   CheckoutSuccess: { orderNumber: string; total: number };
+  DemoPayment: { order: Order };
+  About: undefined;
   Tracking: { orderNumber: string; phone?: string };
   Notifications: undefined;
   Addresses: undefined;
@@ -132,8 +136,6 @@ function TabNavigator() {
 }
 
 export default function RootNavigator() {
-  const { user } = useApp();
-
   return (
     <Stack.Navigator
       screenOptions={{
@@ -141,25 +143,20 @@ export default function RootNavigator() {
         contentStyle: { backgroundColor: colors.bg },
       }}
     >
-      {user ? (
-        <>
-          <Stack.Screen name="Tabs" component={TabNavigator} />
-          <Stack.Screen name="ProductDetails" component={ProductDetailsScreen} options={{ animation: 'slide_from_right', presentation: 'card' }} />
-          <Stack.Screen name="Category" component={CategoryScreen} options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="Search" component={SearchScreen} options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="CheckoutSuccess" component={CheckoutSuccessScreen} options={{ animation: 'fade' }} />
-          <Stack.Screen name="Tracking" component={OrderTrackingScreen} options={{ animation: 'fade' }} />
-          <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="Addresses" component={AddressesScreen} options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="Favorites" component={FavoritesScreen} options={{ animation: 'slide_from_right' }} />
-        </>
-      ) : (
-        <>
-          <Stack.Screen name="SignIn" component={SignInScreen} options={{ animation: 'fade' }} />
-          <Stack.Screen name="SignUp" component={SignUpScreen} options={{ animation: 'slide_from_right' }} />
-        </>
-      )}
+      <Stack.Screen name="Tabs" component={TabNavigator} />
+      <Stack.Screen name="SignIn" component={SignInScreen} options={{ animation: 'fade' }} />
+      <Stack.Screen name="SignUp" component={SignUpScreen} options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="ProductDetails" component={ProductDetailsScreen} options={{ animation: 'slide_from_right', presentation: 'card' }} />
+      <Stack.Screen name="Category" component={CategoryScreen} options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="Search" component={SearchScreen} options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="DemoPayment" component={DemoPaymentScreen} options={{ animation: 'fade' }} />
+      <Stack.Screen name="CheckoutSuccess" component={CheckoutSuccessScreen} options={{ animation: 'fade' }} />
+      <Stack.Screen name="About" component={AboutScreen} options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="Tracking" component={OrderTrackingScreen} options={{ animation: 'fade' }} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="Addresses" component={AddressesScreen} options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="Favorites" component={FavoritesScreen} options={{ animation: 'slide_from_right' }} />
     </Stack.Navigator>
   );
 }
@@ -172,7 +169,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.divider,
     backgroundColor: colors.surface,
-    shadowColor: '#0b1c2e',
+    shadowColor: '#111111',
     shadowOpacity: 0.06,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: -4 },

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Product } from '@duhahe/shared';
+import { cartApi } from '../api';
 import { CatalogProvider, useCatalog } from './CatalogContext';
 import { AppProvider, useApp } from './AppContext';
 
@@ -25,8 +26,11 @@ const STORAGE_KEY = 'duhahe_cart';
 
 function CartProviderInner({ children }: { children: React.ReactNode }) {
   const { products } = useCatalog();
+  const { user } = useApp();
+  const phone = user?.phone ?? '';
   const [items, setItems] = useState<{ productId: string; qty: number }[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [synced, setSynced] = useState(false);
 
   const find = (id: string): Product | undefined => products.find((p) => p.id === id);
 
@@ -53,6 +57,44 @@ function CartProviderInner({ children }: { children: React.ReactNode }) {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    setSynced(false);
+    if (!phone) {
+      setSynced(true);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await cartApi.get(phone);
+        if (cancelled) return;
+        if (res.items.length > 0) {
+          const known = res.items
+            .filter((i) => !!find(i.productId) && i.qty > 0)
+            .map((i) => ({ productId: i.productId, qty: Math.min(i.qty, find(i.productId)!.stockQty) }));
+          setItems(known);
+        }
+      } catch {
+        // keep the local cart
+      } finally {
+        if (!cancelled) setSynced(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, phone]);
+
+  useEffect(() => {
+    if (!hydrated || !synced || !phone) return;
+    const t = setTimeout(() => {
+      cartApi.save(phone, items).catch(() => {});
+    }, 400);
+    return () => clearTimeout(t);
+  }, [items, hydrated, synced, phone]);
 
   useEffect(() => {
     if (!hydrated) return;

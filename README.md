@@ -8,7 +8,7 @@ Built against the proposal by **Sonia Ineza** for **Esperance Mukabaranga**.
 
 | App | Path | Stack | Purpose |
 |-----|------|-------|---------|
-| `@duhahe/mobile` | `apps/mobile` | Expo SDK 57 (React Native 0.86) | Customer storefront: 128-product catalog, search (EN/KIN/FR), kg-based cart, checkout, MTN MoMo / Airtel / Cash-on-delivery (stub), order tracking, language switcher |
+| `@duhahe/mobile` | `apps/mobile` | Expo SDK 57 (React Native 0.86) | Customer storefront: 163-product catalog, search (EN/KIN/FR), kg-based cart, checkout, MTN MoMo / Airtel / Cash-on-delivery (stub), order tracking, language switcher |
 | `@duhahe/admin` | `apps/admin` | Vite + React + Tailwind v4 | Login, live stats dashboard, order hub (Pending → Packing → In Transit → Delivered), price & stock control, low-stock flags |
 | `@duhahe/api` | `apps/api` | Node.js + Express + TypeScript | REST API: catalog, orders, payments (stub gateway), admin auth (JWT), analytics |
 | `@duhahe/shared` | `packages/shared` | TypeScript | Shared types, i18n strings, and the full product catalog data |
@@ -63,7 +63,7 @@ API env vars: `apps/api/.env` (see `apps/api/.env.example`). Admin API URL: `app
 
 ## Feature checklist vs. the 7-week proposal
 
-- ✅ 110+ item catalog (50 staples, 30 vegetables, 30 fruits, 18 kitchenware = **128 items**), searchable in EN/KIN/FR
+- ✅ 163-item catalog (49 staples, 30 vegetables, 30 fruits, 18 kitchenware, 8 household, 10 drinks, 10 personal care, 8 other), searchable in EN/KIN/FR
 - ✅ Smart cart with kg / piece / bundle quantities + live price recalculation
 - ✅ Checkout with delivery fee logic (Kigali vs. provinces) and payment methods
 - ✅ Mobile-first customer app + responsive admin web app
@@ -87,14 +87,28 @@ POST /api/orders                      { items, customer{name,phone,...}, payment
 GET  /api/orders/:phone/recent
 POST /api/payments/stub               { method, orderId, phone, amount }
 
+# Customer data (keyed by phone — demo-friendly):
+GET  /api/favorites?phone=0788...
+PUT  /api/favorites                   { phone, ids }
+POST /api/favorites/toggle            { phone, productId }
+GET  /api/cart?phone=0788...
+PUT  /api/cart                        { phone, items:[{productId,qty}] }
+
 # Admin (Bearer JWT):
 POST /api/admin/auth/login            { email, password }
 GET  /api/admin/me
 GET  /api/admin/stats
 GET  /api/admin/orders
+GET  /api/admin/orders/:id
 PATCH /api/admin/orders/:id/status    { status, note? }
+GET  /api/admin/orders/:id/payment
+PATCH /api/admin/orders/:id/payment   { paymentStatus, note? }
+GET  /api/admin/customers
+GET  /api/admin/notifications?phone=
 GET  /api/admin/inventory
-PATCH /api/admin/inventory/:id        { price?, stockQty?, organic? }
+POST /api/admin/inventory
+PATCH /api/admin/inventory/:id        full product fields (name/description/category/unit/farmer/emoji/minOrderQty/step/price/stockQty/organic)
+DELETE /api/admin/inventory/:id       hard delete (also removed from favourites & saved carts)
 ```
 
 ## Phase 2 — Production hardening (next steps)
@@ -114,5 +128,5 @@ PATCH /api/admin/inventory/:id        { price?, stockQty?, organic? }
 apps/api        Express API + in-memory store + payment stubs
 apps/admin      Admin dashboard (Vite + React + Tailwind)
 apps/mobile     Customer app (Expo / React Native + react-navigation + i18next)
-packages/shared Types, catalog (128 products), EN/KIN/FR translations
+packages/shared Types, catalog (163 products), EN/KIN/FR translations
 ```

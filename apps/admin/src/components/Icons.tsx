@@ -150,3 +150,44 @@ export function LeafIcon({ className, size }: IconProps) {
     </svg>
   );
 }
+
+export function UsersIcon({ className, size }: IconProps) {
+  return (
+    <svg {...base(className, size)}>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+      <path d="M16 3.5a3.5 3.5 0 0 1 0 7" />
+      <path d="M17.5 14.5a6.5 6.5 0 0 1 4 5.5" />
+    </svg>
+  );
+}
+
+export function BellIcon({ className, size }: IconProps) {
+  return (
+    <svg {...base(className, size)}>
+      <path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6" />
+      <path d="M10.5 20a1.5 1.5 0 0 0 3 0" />
+    </svg>
+  );
+}
+
+export function TrashIcon({ className, size }: IconProps) {
+  return (
+    <svg {...base(className, size)}>
+      <path d="M4 7h16" />
+      <path d="M9 7V5h6v2" />
+      <path d="M6 7l1 13h10l1-13" />
+      <path d="M10 11v5" />
+      <path d="M14 11v5" />
+    </svg>
+  );
+}
+
+export function PlusIcon({ className, size }: IconProps) {
+  return (
+    <svg {...base(className, size)}>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  );
+}

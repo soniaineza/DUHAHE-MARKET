@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
-import { adminUser, type CustomerUser } from '../data/store';
+import type { CustomerUser } from '../data/store';
 
 export interface AdminTokenPayload {
   sub: string;
@@ -17,13 +17,13 @@ export interface CustomerTokenPayload {
 }
 
 export function login(email: string, password: string): { token: string; admin: AdminTokenPayload } | null {
-  if (email.toLowerCase() !== adminUser.email.toLowerCase()) return null;
-  if (password !== adminUser.passwordHash) return null;
+  if (email.toLowerCase() !== config.admin.email.toLowerCase()) return null;
+  if (password !== config.admin.password) return null;
   const payload: AdminTokenPayload = {
-    sub: adminUser.id,
-    email: adminUser.email,
-    name: adminUser.name,
-    role: adminUser.role,
+    sub: 'admin-1',
+    email: config.admin.email,
+    name: config.admin.name,
+    role: 'admin',
   };
   const token = jwt.sign(payload, config.jwtSecret, { expiresIn: '12h' });
   return { token, admin: payload };

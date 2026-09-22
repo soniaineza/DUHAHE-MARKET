@@ -19,14 +19,16 @@ publicRouter.get('/categories', (req, res) => {
 publicRouter.get('/products', (req, res) => {
   const lang = ((req.query.lang as Language) ?? 'en') as Language;
   const category = req.query.category as CategoryId | undefined;
+  const minPrice = req.query.minPrice === undefined ? undefined : Number(req.query.minPrice);
+  const maxPrice = req.query.maxPrice === undefined ? undefined : Number(req.query.maxPrice);
   const result = listProducts({
     lang: allowedLangs.includes(lang) ? lang : 'en',
     search: typeof req.query.search === 'string' ? req.query.search : undefined,
     category: category && CATEGORIES.includes(category) ? category : undefined,
     organicOnly: req.query.organic === 'true' || undefined,
     inStockOnly: req.query.inStock === 'true' || undefined,
-    minPrice: req.query.minPrice ? Number(req.query.minPrice) : undefined,
-    maxPrice: req.query.maxPrice ? Number(req.query.maxPrice) : undefined,
+    minPrice: minPrice !== undefined && Number.isFinite(minPrice) ? minPrice : undefined,
+    maxPrice: maxPrice !== undefined && Number.isFinite(maxPrice) ? maxPrice : undefined,
     sort:
       (req.query.sort as 'price_asc' | 'price_desc' | 'name' | 'popularity') ??
       undefined,

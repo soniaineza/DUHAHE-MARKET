@@ -11,6 +11,14 @@ export const config = {
   host: process.env.HOST ?? '0.0.0.0',
   corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:5173').split(',').map((s) => s.trim()),
   jwtSecret: process.env.JWT_SECRET ?? 'dev-secret-change-me',
+  /**
+   * DEMO_MODE=false (default, owner/production config):
+   *   MongoDB is REQUIRED. If it cannot be reached the API refuses to start -
+   *   no silent fallback to the in-memory demo store.
+   * DEMO_MODE=true (explicit, dev only):
+   *   Allows clearly-labelled offline/demo runs on the in-memory store.
+   */
+  demoMode: process.env.DEMO_MODE === 'true',
   mongo: {
     uri: process.env.MONGO_URI ?? '',
     database: process.env.MONGO_DATABASE ?? 'duhahe_market',
@@ -26,7 +34,8 @@ export const config = {
     apiUser: process.env.MTN_MOMO_API_USER ?? '',
     apiKey: process.env.MTN_MOMO_API_KEY ?? '',
     subscriptionKey: process.env.MTN_MOMO_SUBSCRIPTION_KEY ?? '',
-    payeePhone: process.env.MTN_MOMO_PAYEE_PHONE ?? '250788000000',
+    payeePhone: process.env.MTN_MOMO_PAYEE_PHONE ?? '250799659605',
+    payeeCode: process.env.MTN_MOMO_PAYEE_CODE ?? '99958',
   },
   airtel: {
     enabled: process.env.AIRTEL_MONEY_ENABLED === 'true',

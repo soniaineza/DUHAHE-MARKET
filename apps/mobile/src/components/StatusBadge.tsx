@@ -6,7 +6,7 @@ const meta: Record<OrderStatus, { color: string; bg: string }> = {
   pending: { color: '#b45309', bg: '#fef3c7' },
   packing: { color: '#1d4ed8', bg: '#dbeafe' },
   in_transit: { color: '#6d28d9', bg: '#ede9fe' },
-  delivered: { color: '#15803d', bg: '#dcfce7' },
+  delivered: { color: '#111111', bg: '#EDE8DA' },
   cancelled: { color: '#6b7280', bg: '#f3f4f6' },
 };
 

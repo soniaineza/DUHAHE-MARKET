@@ -42,12 +42,17 @@ export default function HomeScreen() {
             <Icon name="map-marker" size={18} color={colors.white} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.locCity}>Duhahe</Text>
+            <Pressable onPress={() => { haptic('light'); nav.navigate('About'); }} hitSlop={6}>
+              <Text style={styles.locCity} numberOfLines={1}>{t('about.brand')}</Text>
+            </Pressable>
             <Pressable onPress={() => { haptic('light'); nav.navigate('Addresses'); }} style={styles.locSubRow} hitSlop={6}>
               <Text style={styles.locSub}>{t('home.deliverTo')}</Text>
               <Icon name="chevron-down" size={12} color={colors.faint} />
             </Pressable>
           </View>
+          <Pressable style={styles.bellBtn} hitSlop={6} onPress={() => { haptic('light'); nav.navigate('About'); }}>
+            <Icon name="information-outline" size={21} color={colors.ink} />
+          </Pressable>
           <Pressable style={styles.bellBtn} hitSlop={6} onPress={() => { haptic('light'); nav.navigate('Notifications'); }}>
             <Icon name="bell-outline" size={22} color={colors.ink} />
             <View style={styles.bellDot} />

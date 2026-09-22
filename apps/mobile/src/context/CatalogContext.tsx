@@ -47,7 +47,7 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
         const needle = q.trim().toLowerCase();
         if (!needle) return products;
         return products.filter((p) =>
-          [p.name.en, p.name.kin, p.name.fr, p.description.en, p.description.fr, p.sku, p.farmer ?? '']
+          [p.name.en, p.name.kin, p.name.fr, p.description.en, p.description.kin, p.description.fr, p.sku, p.farmer ?? '']
             .join(' ')
             .toLowerCase()
             .includes(needle)

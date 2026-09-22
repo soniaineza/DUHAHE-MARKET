@@ -10,7 +10,7 @@ import QtyStepper from '../components/QtyStepper';
 import EmptyState from '../components/EmptyState';
 import Icon from '../components/Icon';
 import { fmtRWF } from '../components/Money';
-import { haptic } from '../components/Toast';
+import { haptic, useToast } from '../components/Toast';
 import ProductImage from '../components/ProductImage';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors, fontSizes, radii } from '../theme';
@@ -31,9 +31,10 @@ const unitLabel: Record<string, Record<'en' | 'kin' | 'fr', string>> = {
 
 export default function CartScreen() {
   const { t } = useTranslation();
-  const { lang } = useApp();
+  const { lang, user } = useApp();
   const cart = useCart();
   const nav = useNavigation<Nav>();
+  const { show } = useToast();
 
   const progress = Math.min(cart.subtotal / FREE_DELIVERY_THRESHOLD, 1);
   const remaining = FREE_DELIVERY_THRESHOLD - cart.subtotal;
@@ -53,7 +54,7 @@ export default function CartScreen() {
           <EmptyState
             icon="basket-outline"
             title={t('cart.empty')}
-            message={t('payment.thisIsDemo').replace(':', '')}
+            message={t('cart.emptySub')}
             actionLabel={t('cart.emptyCta')}
             onAction={() => nav.navigate('Tabs', { screen: 'Home' })}
           />
@@ -70,7 +71,7 @@ export default function CartScreen() {
               </View>
               <View style={styles.progressTrack}>
                 <LinearGradient
-                  colors={freeReached ? [colors.success, '#33c78c'] : [colors.accent, colors.accentDark]}
+                  colors={freeReached ? [colors.ink, colors.inkSoft] : [colors.accent, colors.accentDark]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={[styles.progressFill, { width: `${Math.max(progress * 100, 4)}%` }]}
@@ -117,7 +118,15 @@ export default function CartScreen() {
               <Text style={styles.footerNote}>{t('common.deliveryFee')} · {t('checkout.delivery')}</Text>
             </View>
             <Pressable
-              onPress={() => { haptic('medium'); nav.navigate('Checkout'); }}
+              onPress={() => {
+                haptic('medium');
+                if (!user) {
+                  show(t('auth.signIn'), 'info');
+                  nav.navigate('SignIn');
+                  return;
+                }
+                nav.navigate('Checkout');
+              }}
               style={({ pressed }) => [styles.checkoutBtn, pressed && styles.checkoutPressed]}
             >
               <Text style={styles.checkoutText}>{t('cart.checkout')}</Text>

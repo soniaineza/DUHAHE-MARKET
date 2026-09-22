@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     maxWidth: 420,
     borderLeftWidth: 4,
-    ...shadow.md,
+    boxShadow: '0 6px 14px #171A18',
   },
   text: { color: colors.white, fontSize: 14, fontWeight: '600', flexShrink: 1 },
 });

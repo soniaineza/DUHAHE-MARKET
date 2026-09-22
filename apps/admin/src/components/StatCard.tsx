@@ -1,50 +1,40 @@
 import type { ReactNode } from 'react';
-import { TrendUpIcon, TrendDownIcon } from './Icons';
 
-export interface StatCardProps {
+export interface StatCellProps {
   label: string;
   value: string;
-  hint?: string;
-  icon: ReactNode;
-  iconBg?: string;
-  spark?: number[];
+  hint?: ReactNode;
   delta?: number | null;
-  accent?: boolean;
+  icon?: ReactNode;
 }
 
-export default function StatCard({ label, value, hint, icon, iconBg = 'bg-leaf-50 text-leaf-600', spark, delta, accent }: StatCardProps) {
-  const deltaUp = (delta ?? 0) >= 0;
+function Delta({ value }: { value: number | null }) {
+  if (value == null) return null;
+  const up = value >= 0;
   return (
-    <div className={`card p-5 ${accent ? 'bg-gradient-to-br from-leaf-600 to-leaf-700 border-leaf-500 text-white' : ''}`}>
-      <div className="flex items-start justify-between">
-        <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${accent ? 'bg-white/15 text-white' : iconBg}`}>
-          {icon}
-        </div>
-        {delta != null && (
-          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
-            accent
-              ? deltaUp ? 'bg-white/20 text-white' : 'bg-white/20 text-white'
-              : deltaUp ? 'bg-leaf-50 text-leaf-700' : 'bg-red-50 text-red-600'
-          }`}>
-            {deltaUp ? <TrendUpIcon size={12} /> : <TrendDownIcon size={12} />}
-            {deltaUp ? '+' : ''}{delta}%
-          </span>
-        )}
+    <span className={`inline-flex items-center gap-0.5 text-xs font-semibold tabular-nums ${up ? 'text-status-delivered' : 'text-red-600'}`}>
+      {up ? '↑' : '↓'}
+      {Math.abs(value)}%
+    </span>
+  );
+}
+
+/**
+ * One metric cell inside the divided KPI strip. Typography-first:
+ * small label, large number, contextual line. No icon boxes.
+ */
+export default function StatCard({ label, value, hint, delta, icon }: StatCellProps) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1 px-5 py-4">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-faint">
+        {icon && <span className="text-faint">{icon}</span>}
+        <span className="truncate">{label}</span>
       </div>
-      <div className={`mt-4 text-[11px] font-bold uppercase tracking-wide ${accent ? 'text-leaf-100' : 'text-muted'}`}>{label}</div>
-      <div className={`mt-1 text-2xl font-black tracking-tight ${accent ? 'text-white' : 'text-ink'}`}>{value}</div>
-      {spark && spark.length > 1 && (
-        <div className="mt-3 flex h-8 items-end gap-1">
-          {spark.map((v, i) => (
-            <div
-              key={i}
-              className={`flex-1 rounded-sm ${accent ? 'bg-white/30' : 'bg-leaf-200'}`}
-              style={{ height: `${Math.max((v / Math.max(...spark)) * 100, 12)}%` }}
-            />
-          ))}
-        </div>
-      )}
-      {hint && <div className={`mt-2 text-xs ${accent ? 'text-leaf-100' : 'text-faint'}`}>{hint}</div>}
+      <div className="metric-value tabular-nums">{value}</div>
+      <div className="flex min-h-4 items-center gap-1.5 text-xs text-muted">
+        <Delta value={delta ?? null} />
+        {hint && <span className="truncate">{hint}</span>}
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, type Product } from '../api';
 import type { CategoryId } from '@duhahe/shared';
-import { SearchIcon, TagIcon } from '../components/Icons';
+import { SearchIcon, TagIcon, TrashIcon } from '../components/Icons';
 import { useAdminI18n } from '../i18n';
 
 const catLabels: Record<CategoryId, string> = {
@@ -38,6 +38,11 @@ export default function Inventory() {
   const [showAdd, setShowAdd] = useState(false);
   const [newProduct, setNewProduct] = useState({ sku: '', en: '', kin: '', fr: '', category: 'staples' as CategoryId, unit: 'kg' as Product['unit'], price: '0', stockQty: '0', emoji: '🛒', organic: true });
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Product | null>(null);
+  const [editForm, setEditForm] = useState({ en: '', kin: '', fr: '', descEn: '', descKin: '', descFr: '', category: 'staples' as CategoryId, unit: 'kg' as Product['unit'], price: '0', stockQty: '0', minOrderQty: '1', step: '1', emoji: '🛒', organic: true, farmer: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = () =>
     api.inventory()
@@ -109,6 +114,68 @@ export default function Inventory() {
     }
   };
 
+  const openEdit = (p: Product) => {
+    setEditing(p);
+    setEditForm({
+      en: p.name.en,
+      kin: p.name.kin,
+      fr: p.name.fr,
+      descEn: p.description.en,
+      descKin: p.description.kin,
+      descFr: p.description.fr,
+      category: p.category,
+      unit: p.unit,
+      price: String(p.price),
+      stockQty: String(p.stockQty),
+      minOrderQty: String(p.minOrderQty),
+      step: String(p.step),
+      emoji: p.emoji,
+      organic: p.organic,
+      farmer: p.farmer ?? '',
+    });
+  };
+
+  const saveEdit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editing) return;
+    setSavingEdit(true);
+    try {
+      const res = await api.updateInventory(editing.id, {
+        name: { en: editForm.en.trim(), kin: editForm.kin.trim(), fr: editForm.fr.trim() },
+        description: { en: editForm.descEn.trim(), kin: editForm.descKin.trim(), fr: editForm.descFr.trim() },
+        category: editForm.category,
+        unit: editForm.unit,
+        price: Number(editForm.price),
+        stockQty: Number(editForm.stockQty),
+        minOrderQty: Number(editForm.minOrderQty),
+        step: Number(editForm.step),
+        emoji: editForm.emoji.trim() || '🛒',
+        organic: editForm.organic,
+        farmer: editForm.farmer.trim(),
+      });
+      setItems((prev) => prev.map((p) => (p.id === editing.id ? res.data : p)));
+      setEditing(null);
+    } catch (e) {
+      alert(`${t('saveFailed')}: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const removeProduct = async () => {
+    if (!confirmDelete || deleting) return;
+    setDeleting(true);
+    try {
+      await api.deleteInventory(confirmDelete);
+      setItems((prev) => prev.filter((p) => p.id !== confirmDelete));
+      setConfirmDelete(null);
+    } catch (e) {
+      alert(`${t('saveFailed')}: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="p-8 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -149,7 +216,7 @@ export default function Inventory() {
           <input required type="number" min="0" step="0.5" value={newProduct.stockQty} onChange={(e) => setNewProduct((p) => ({ ...p, stockQty: e.target.value }))} placeholder={`${t('inStock')} quantity`} className="rounded-xl border border-line px-3 py-2.5 text-sm" />
           <input value={newProduct.emoji} onChange={(e) => setNewProduct((p) => ({ ...p, emoji: e.target.value }))} placeholder="Emoji" className="rounded-xl border border-line px-3 py-2.5 text-sm" />
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={newProduct.organic} onChange={(e) => setNewProduct((p) => ({ ...p, organic: e.target.checked }))} /> Organic</label>
-          <div className="md:col-span-3 flex justify-end gap-2"><button type="button" onClick={() => setShowAdd(false)} className="btn-ghost">{t('common.cancel', 'Cancel')}</button><button disabled={adding} className="btn-primary">{adding ? t('saving') : t('common.save', 'Save')}</button></div>
+          <div className="md:col-span-3 flex justify-end gap-2"><button type="button" onClick={() => setShowAdd(false)} className="btn-ghost">{t('common.cancel', 'Cancel')}</button><button type="submit" disabled={adding} className="btn-primary">{adding ? t('saving') : t('common.save', 'Save')}</button></div>
         </form>
       )}
 
@@ -233,7 +300,7 @@ export default function Inventory() {
                 </div>
 
                 <div className="mt-2.5 flex items-center justify-between">
-                  <div className={`text-xs font-bold ${oos ? 'text-red-600' : low ? 'text-harvest-500' : 'text-green-600'}`}>
+                  <div className={`text-xs font-bold ${oos ? 'text-red-600' : low ? 'text-harvest-500' : 'text-ink'}`}>
                     {oos ? t('common.outOfStock', 'Out of stock') : low ? `Low · ${p.stockQty} ${p.unit}` : `${t('common.inStock', 'In stock')} · ${p.stockQty} ${p.unit}`}
                   </div>
                   <button
@@ -246,9 +313,25 @@ export default function Inventory() {
                   </button>
                 </div>
 
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    onClick={() => openEdit(p)}
+                    className="flex-1 text-xs font-bold rounded-full border border-line px-3 py-1.5 text-muted hover:bg-leaf-50 hover:text-leaf-700 hover:border-leaf-200 transition"
+                  >
+                    ✎ {t('editProduct')}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(p.id)}
+                    title={t('deleteProduct')}
+                    className="inline-flex items-center justify-center rounded-full border border-line px-2.5 py-1.5 text-muted hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition"
+                  >
+                    <TrashIcon size={14} />
+                  </button>
+                </div>
+
                 <div className="h-4 mt-1">
                   {saving === p.id && <span className="text-[11px] text-leaf-600 font-semibold animate-pulse">{t('saving')}</span>}
-                  {savedId === p.id && saving !== p.id && <span className="text-[11px] text-green-600 font-semibold">✓ {t('saved')}</span>}
+                  {savedId === p.id && saving !== p.id && <span className="text-[11px] text-ink font-semibold">✓ {t('saved')}</span>}
                 </div>
               </div>
             </div>
@@ -259,6 +342,94 @@ export default function Inventory() {
         <div className="card py-12 text-center text-muted text-sm flex flex-col items-center gap-2">
           <TagIcon className="text-faint" size={24} />
           {t('noProducts')}
+        </div>
+      )}
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-6 overflow-y-auto" onClick={() => setEditing(null)}>
+          <form className="card w-full max-w-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()} onSubmit={saveEdit}>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="font-bold text-soft">{t('editProduct')}</h2>
+              <span className="text-[10px] font-mono text-faint bg-leaf-50 rounded px-1.5 py-0.5">{editing.sku}</span>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              {(['en', 'kin', 'fr'] as const).map((key) => (
+                <div key={key}>
+                  <label className="block text-[11px] text-muted font-semibold mb-1">{t('name')} ({key})</label>
+                  <input required value={editForm[key]} onChange={(e) => setEditForm((f) => ({ ...f, [key]: e.target.value }))} className="w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
+                </div>
+              ))}
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              {(['en', 'kin', 'fr'] as const).map((key) => (
+                <div key={key}>
+                  <label className="block text-[11px] text-muted font-semibold mb-1">{t('descriptions')} ({key})</label>
+                  <input value={editForm[`desc${key.charAt(0).toUpperCase()}${key.slice(1)}` as 'descEn' | 'descKin' | 'descFr']} onChange={(e) => { const k = `desc${key.charAt(0).toUpperCase()}${key.slice(1)}` as 'descEn' | 'descKin' | 'descFr'; setEditForm((f) => ({ ...f, [k]: e.target.value })); }} className="w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
+                </div>
+              ))}
+            </div>
+            <div className="grid gap-3 md:grid-cols-4">
+              <div>
+                <label className="block text-[11px] text-muted font-semibold mb-1">{t('categories.', 'Category')}</label>
+                <select value={editForm.category} onChange={(e) => setEditForm((f) => ({ ...f, category: e.target.value as CategoryId }))} className="w-full rounded-xl border border-line px-3 py-2.5 text-sm bg-white">
+                  {(Object.keys(catLabels) as CategoryId[]).map((key) => <option key={key} value={key}>{t(`categories.${key}`, catLabels[key])}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] text-muted font-semibold mb-1">{t('unit.', 'Unit')}</label>
+                <select value={editForm.unit} onChange={(e) => setEditForm((f) => ({ ...f, unit: e.target.value as Product['unit'] }))} className="w-full rounded-xl border border-line px-3 py-2.5 text-sm bg-white">
+                  {(['kg', 'piece', 'bundle', 'pack', 'dozen', 'liter', 'box', 'bottle', 'can', 'bag', 'pair'] as Product['unit'][]).map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] text-muted font-semibold mb-1">{t('total')} (RWF)</label>
+                <input required type="number" min="0" step="0.01" value={editForm.price} onChange={(e) => setEditForm((f) => ({ ...f, price: e.target.value }))} className="w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-[11px] text-muted font-semibold mb-1">Stock</label>
+                <input required type="number" min="0" step="0.5" value={editForm.stockQty} onChange={(e) => setEditForm((f) => ({ ...f, stockQty: e.target.value }))} className="w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-[11px] text-muted font-semibold mb-1">{t('minOrder')}</label>
+                <input required type="number" min="0.01" step="0.01" value={editForm.minOrderQty} onChange={(e) => setEditForm((f) => ({ ...f, minOrderQty: e.target.value }))} className="w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-[11px] text-muted font-semibold mb-1">{t('stepLabel')}</label>
+                <input required type="number" min="0.01" step="0.01" value={editForm.step} onChange={(e) => setEditForm((f) => ({ ...f, step: e.target.value }))} className="w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-[11px] text-muted font-semibold mb-1">{t('emojiLabel')}</label>
+                <input value={editForm.emoji} onChange={(e) => setEditForm((f) => ({ ...f, emoji: e.target.value }))} className="w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-[11px] text-muted font-semibold mb-1">{t('farmerLabel')}</label>
+                <input value={editForm.farmer} onChange={(e) => setEditForm((f) => ({ ...f, farmer: e.target.value }))} placeholder="—" className="w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={editForm.organic} onChange={(e) => setEditForm((f) => ({ ...f, organic: e.target.checked }))} />
+              {t('organicLabel')}
+            </label>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setEditing(null)} className="btn-ghost">{t('cancel')}</button>
+              <button type="submit" disabled={savingEdit} className="btn-primary">{savingEdit ? t('saving') : t('common.save', 'Save')}</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" onClick={() => setConfirmDelete(null)}>
+          <div className="card w-full max-w-sm p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-bold text-soft">{t('deleteProduct')}</h2>
+            <p className="text-sm text-muted">{t('confirmDelete')}</p>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-ghost" onClick={() => setConfirmDelete(null)}>{t('cancel')}</button>
+              <button type="button" onClick={removeProduct} disabled={deleting} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 transition disabled:opacity-60">
+                {deleting ? t('saving') : t('deleteThis')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

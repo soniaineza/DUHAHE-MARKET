@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: duhahe-api
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm install && npm run build -w @duhahe/api
+    startCommand: npm run start -w @duhahe/api
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 4000
+      - key: MONGO_DATABASE
+        value: duhahe_market_prod
+      - key: CORS_ORIGINS
+        value: https://duhahe-admin.vercel.app
+      - key: ADMIN_EMAIL
+        value: admin@duhahe.rw
+      - key: ADMIN_PASSWORD
+        value: admin123
+      - key: ADMIN_NAME
+        value: Esperance Mukabaranga
+      - key: JWT_SECRET
+        sync: false
+      - key: MONGO_URI
+        sync: false

@@ -1,14 +1,32 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api, type Comparison, type DashboardStats } from '../api';
 import StatCard from '../components/StatCard';
-import BarChart from '../components/BarChart';
-import { CartIcon, MoneyIcon, TruckIcon, StarIcon } from '../components/Icons';
+import SalesChart from '../components/SalesChart';
 import { useAdminI18n } from '../i18n';
 
 const fmtRWF = (n: number) => `${n.toLocaleString('en-RW')} RWF`;
 
 type Stats = DashboardStats & {
   comparison?: Comparison;
+};
+
+const statusDot: Record<string, string> = {
+  pending: 'bg-status-pending',
+  packing: 'bg-status-packing',
+  in_transit: 'bg-status-transit',
+  delivered: 'bg-status-delivered',
+  cancelled: 'bg-status-cancelled',
+};
+
+const catLabels: Record<string, string> = {
+  staples: 'Ibinyampeke',
+  vegetables: 'Imboga',
+  fruits: 'Imbuto',
+  kitchenware: 'Ibikoresho',
+  household: 'Ibikoresho byo mu ngoro',
+  drinks: 'Ibinyobwa',
+  personal_care: 'Kwita ku mubiri',
+  other: 'Ibindi',
 };
 
 export default function Dashboard() {
@@ -22,205 +40,210 @@ export default function Dashboard() {
       .catch((e) => setError(e.message));
   }, []);
 
-  if (error) return <div className="text-red-600">{t('failedStats')}: {error}</div>;
+  // Operational "needs attention" list, derived from real stats — no fake data.
+  const attention = useMemo(() => {
+    if (!stats) return [] as { label: string; value: number }[];
+    const items: { label: string; value: number }[] = [];
+    if (stats.pendingOrders > 0)
+      items.push({
+        label: t('pendingAction'),
+        value: stats.pendingOrders,
+      });
+    const low = stats.outOfStockCount + stats.lowStockCount;
+    if (low > 0) items.push({ label: t('lowStockOnly'), value: low });
+    if (stats.ordersByStatus.in_transit > 0)
+      items.push({ label: t('inTransitLabel'), value: stats.ordersByStatus.in_transit });
+    return items;
+  }, [stats, t]);
+
+  if (error)
+    return (
+      <div className="p-6">
+        <div className="panel p-5 text-sm text-red-600">{t('failedStats')}: {error}</div>
+      </div>
+    );
+
   if (!stats) {
     return (
-      <div className="p-8 space-y-6">
-        <div className="h-7 w-40 rounded-lg bg-leaf-50 animate-pulse" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[0, 1, 2, 3].map((i) => <div key={i} className="card h-36 animate-pulse" />)}
+      <div className="space-y-6 p-6 lg:p-8">
+        <div className="h-5 w-44 animate-pulse rounded-md bg-line" />
+        <div className="panel grid grid-cols-2 md:grid-cols-4 md:divide-x md:divide-line">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-24 animate-pulse" />
+          ))}
         </div>
-        <div className="grid md:grid-cols-2 gap-4">
-          {[0, 1].map((i) => <div key={i} className="card h-64 animate-pulse" />)}
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="panel h-72 animate-pulse lg:col-span-2" />
+          <div className="panel h-72 animate-pulse" />
         </div>
       </div>
     );
   }
 
-  const catLabels: Record<string, string> = {
-    staples: 'Food',
-    vegetables: 'Vegetables',
-    fruits: 'Fruits',
-    kitchenware: 'Kitchen',
-    household: 'Household',
-    drinks: 'Drinks',
-    personal_care: 'Personal Care',
-    other: 'Other',
-  };
-
-  const catEmojis: Record<string, string> = {
-    staples: '🌾',
-    vegetables: '🥬',
-    fruits: '🍍',
-    kitchenware: '🍲',
-    household: '🧺',
-    drinks: '🥤',
-    personal_care: '🧴',
-    other: '🕯️',
-  };
-
-  const statusMeta: Record<string, { color: string; dot: string }> = {
-    pending: { color: '#f59e0b', dot: 'bg-amber-500' },
-    packing: { color: '#3b82f6', dot: 'bg-blue-500' },
-    in_transit: { color: '#8b5cf6', dot: 'bg-violet-500' },
-    delivered: { color: '#22c55e', dot: 'bg-green-500' },
-    cancelled: { color: '#9ca3af', dot: 'bg-gray-400' },
-  };
-
-  const statusSlice = (['pending', 'packing', 'in_transit', 'delivered', 'cancelled'] as const)
+  const statusRows = (['delivered', 'pending', 'in_transit', 'packing', 'cancelled'] as const)
     .map((s) => ({ s, v: stats.ordersByStatus[s] }))
     .filter((x) => x.v > 0);
-  const statusTotal = statusSlice.reduce((a, b) => a + b.v, 0);
-  const conic = statusSlice
-    .map((x, i) => {
-      const from = (statusSlice.slice(0, i).reduce((a, b) => a + b.v, 0) / statusTotal) * 360;
-      const to = ((statusSlice.slice(0, i + 1).reduce((a, b) => a + b.v, 0)) / statusTotal) * 360;
-      return `${statusMeta[x.s].color} ${from}deg ${to}deg`;
-    })
-    .join(', ');
 
   const topRevenue = stats.revenueByCategory.length ? Math.max(...stats.revenueByCategory.map((c) => c.revenue)) : 1;
-  const daySpark = stats.ordersByDay.map((d) => d.orders);
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="space-y-6 p-6 lg:p-8">
+      {/* Page header — compact, right-aligned context */}
+      <div className="flex items-end justify-between gap-3">
         <div>
-            <h1 className="text-2xl font-black tracking-tight">{t('dashboard')}</h1>
-          <p className="text-sm text-muted mt-0.5">
-            {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+          <h1 className="page-title">{t('dashboard')}</h1>
+          <p className="metadata mt-0.5">
+            {new Date().toLocaleDateString(lang === 'kin' ? 'rw-RW' : lang === 'fr' ? 'fr-FR' : 'en-GB', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+            })}
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-full bg-white border border-line px-4 py-2 text-sm text-muted">
-          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+        <div className="flex items-center gap-2 text-xs text-muted">
+          <span className="h-1.5 w-1.5 rounded-full bg-status-delivered" />
           {t('storeLive')}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* KPI strip: one panel, divided cells — not four floating cards */}
+      <section className="panel grid grid-cols-2 md:grid-cols-4 md:divide-x md:divide-line">
         <StatCard
           label={t('ordersToday')}
           value={String(stats.todayOrders)}
-          icon={<CartIcon size={20} />}
-          iconBg="text-leaf-600"
-          spark={daySpark}
-          delta={stats.comparison?.changePct ?? 0}
-          accent
+          delta={stats.comparison?.changePct ?? null}
+          hint={t('vsYesterday')}
         />
         <StatCard
           label={t('totalRevenue')}
           value={fmtRWF(stats.revenue)}
-          hint={`${fmtRWF(stats.todayRevenue)} today`}
-          icon={<MoneyIcon size={20} />}
-          iconBg="bg-harvest-50 text-harvest-500"
+          hint={`+${fmtRWF(stats.todayRevenue)} ${t('today')}`}
         />
         <StatCard
           label={t('pendingToShip')}
           value={String(stats.pendingOrders)}
           hint={t('pendingPacking')}
-          icon={<TruckIcon size={20} />}
-          iconBg="bg-blue-50 text-blue-500"
         />
         <StatCard
           label={t('avgOrder')}
           value={fmtRWF(stats.avgOrderValue)}
           hint={`${stats.activeCustomers} ${t('activeCustomers')}`}
-          icon={<StarIcon size={20} />}
-          iconBg="bg-violet-50 text-violet-500"
         />
-      </div>
+      </section>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="font-bold text-soft">{t('lastSeven')}</h2>
-              <p className="text-xs text-faint">{t('volumeDay')}</p>
-            </div>
-            <span className="rounded-full bg-leaf-50 text-leaf-700 text-xs font-bold px-3 py-1">
-              {stats.ordersByDay.reduce((a, d) => a + d.orders, 0)} {t('orderCount')}
+      {/* Needs attention — operational line, only rendered with content */}
+      {attention.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[13px]">
+          <span className="section-title">{t('needsAttention')}</span>
+          {attention.map((a) => (
+            <span key={a.label} className="flex items-center gap-1.5 text-muted">
+              <span className="h-1.5 w-1.5 rounded-full bg-harvest-500" />
+              <b className="font-semibold text-ink tabular-nums">{a.value}</b> {a.label}
             </span>
-          </div>
-          <BarChart
-            bars={stats.ordersByDay.map((d) => ({
-              label: d.day.slice(5).replace('-', '/'),
-              value: d.orders,
-              sub: d.revenue.toString(),
-            }))}
+          ))}
+        </div>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Sales chart — 2/3 width */}
+        <div className="lg:col-span-2">
+          <SalesChart
+            orders={stats.ordersByDay.map((d) => ({ label: d.day.slice(5).replace('-', '/'), value: d.orders }))}
+            revenue={stats.ordersByDay.map((d) => ({ label: d.day.slice(5).replace('-', '/'), value: d.revenue }))}
           />
         </div>
 
-        <div className="card p-5">
-          <h2 className="font-bold text-soft mb-4">{t('byStatus')}</h2>
-          <div className="flex items-center gap-6">
-            <div
-              className="relative h-36 w-36 shrink-0 rounded-full"
-              style={{ background: `conic-gradient(${conic})` }}
-            >
-              <div className="absolute inset-4 rounded-full bg-white flex items-center justify-center flex-col">
-                <span className="text-2xl font-black text-ink">{stats.totalOrders}</span>
-                <span className="text-[10px] text-faint font-bold uppercase">{t('orderCount')}</span>
-              </div>
-            </div>
-            <div className="flex-1 space-y-2">
-              {(['pending', 'packing', 'in_transit', 'delivered', 'cancelled'] as const).map((s) => {
-                const v = stats.ordersByStatus[s];
-                const pct = stats.totalOrders ? Math.round((v / stats.totalOrders) * 100) : 0;
-                return (
-                  <div key={s} className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2 capitalize">
-                      <span className={`h-2.5 w-2.5 rounded-full ${statusMeta[s].dot}`} />
-                      {t(`status.${s}`, s.replace('_', ' '))}
-                    </span>
-                    <span className="text-muted font-semibold">{v} · {pct}%</span>
-                  </div>
-                );
-              })}
-            </div>
+        {/* Order status — scannable list, no donut */}
+        <section className="panel p-5">
+          <h2 className="text-sm font-bold text-ink">{t('byStatus')}</h2>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="metric-value tabular-nums">{stats.totalOrders}</span>
+            <span className="metadata">{t('orderCount')}</span>
           </div>
-        </div>
+          <ul className="mt-4 divide-y divide-line/70">
+            {statusRows.map(({ s, v }) => (
+              <li key={s} className="flex items-center justify-between py-2 text-sm">
+                <span className="flex items-center gap-2 text-soft">
+                  <span className={`dot ${statusDot[s]}`} />
+                  {t(`status.${s}`, s.replace('_', ' '))}
+                </span>
+                <span className="flex items-baseline gap-2 tabular-nums">
+                  <span className="font-semibold text-ink">{v}</span>
+                  <span className="metadata w-9 text-right">
+                    {stats.totalOrders ? Math.round((v / stats.totalOrders) * 100) : 0}%
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        <div className="card p-5">
-          <h2 className="font-bold text-soft mb-4">{t('revenueCategory')}</h2>
-          <div className="space-y-3">
-            {stats.revenueByCategory
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Top products — real table */}
+        <section className="panel overflow-hidden">
+          <div className="flex items-center justify-between px-5 pt-4 pb-3">
+            <h2 className="text-sm font-bold text-ink">{t('topProducts')}</h2>
+            <span className="metadata">{t('last7Short')}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th className="w-8 pl-5">#</th>
+                  <th>{t('productCol')}</th>
+                  <th className="tbl-num">{t('sold')}</th>
+                  <th className="tbl-num pr-5">{t('revenueCol')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.topProducts.slice(0, 6).map((top, i) => (
+                  <tr key={top.product.id}>
+                    <td className="pl-5 metadata tabular-nums">{i + 1}</td>
+                    <td>
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-bg text-sm">
+                          {top.product.emoji}
+                        </span>
+                        <span className="truncate font-medium text-ink">{top.product.name[lang]}</span>
+                      </div>
+                    </td>
+                    <td className="tbl-num whitespace-nowrap">
+                      {top.units} {top.product.unit}
+                    </td>
+                    <td className="tbl-num pr-5 font-semibold text-ink">{fmtRWF(top.revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* Revenue by category — thin professional bars with percentages */}
+        <section className="panel p-5">
+          <h2 className="text-sm font-bold text-ink">{t('revenueCategory')}</h2>
+          <ul className="mt-4 space-y-3.5">
+            {[...stats.revenueByCategory]
               .sort((a, b) => b.revenue - a.revenue)
               .map((c) => {
+                const total = stats.revenueByCategory.reduce((a, x) => a + x.revenue, 0) || 1;
                 return (
-                  <div key={c.category} className="flex items-center gap-3">
-                    <span className="text-lg w-7 text-center">{catEmojis[c.category]}</span>
-                    <span className="w-24 text-sm text-muted">{t(`categories.${c.category}`, catLabels[c.category])}</span>
-                    <div className="flex-1 h-2.5 rounded-full bg-leaf-50">
-                      <div
-                        className="h-2.5 rounded-full bg-gradient-to-r from-leaf-500 to-leaf-400"
-                        style={{ width: `${(c.revenue / topRevenue) * 100}%` }}
-                      />
+                  <li key={c.category}>
+                    <div className="flex items-baseline justify-between gap-3 text-[13px]">
+                      <span className="truncate text-soft">{t(`categories.${c.category}`, catLabels[c.category])}</span>
+                      <span className="shrink-0 tabular-nums">
+                        <b className="font-semibold text-ink">{fmtRWF(c.revenue)}</b>
+                        <span className="metadata ml-2">{Math.round((c.revenue / total) * 100)}%</span>
+                      </span>
                     </div>
-                    <span className="text-sm font-bold w-28 text-right">{fmtRWF(c.revenue)}</span>
-                  </div>
+                    <div className="bar-track mt-1.5">
+                      <div className="bar-fill" style={{ width: `${(c.revenue / topRevenue) * 100}%` }} />
+                    </div>
+                  </li>
                 );
               })}
-          </div>
-        </div>
-
-        <div className="card p-5">
-          <h2 className="font-bold text-soft mb-4">{t('topProducts')}</h2>
-          <div className="space-y-2.5">
-            {stats.topProducts.slice(0, 6).map((top, i) => (
-              <div key={top.product.id} className="flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-leaf-50 transition">
-                <span className={`text-xs font-black w-5 text-center ${i === 0 ? 'text-harvest-500' : 'text-faint'}`}>#{i + 1}</span>
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-leaf-50 text-lg">{top.product.emoji}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold truncate">{top.product.name[lang]}</div>
-                  <div className="text-xs text-faint">{top.units} {top.product.unit} {t('sold')}</div>
-                </div>
-                <span className="text-sm font-bold">{fmtRWF(top.revenue)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+          </ul>
+        </section>
       </div>
     </div>
   );

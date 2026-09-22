@@ -82,10 +82,14 @@ export default function CheckoutScreen() {
   const deliveryFee = useMemo(() => (district === 'Gasabo' || district === 'Kicukiro' || district === 'Nyarugenge' ? 1000 : 2500), [district]);
   const total = cart.subtotal + deliveryFee;
 
-  const canSubmit = name.trim() && phone.trim().length >= 10 && district && cart.lines.length > 0;
+  const canSubmit = name.trim() && phone.trim().length >= 9 && district && cart.lines.length > 0;
 
   const placeOrder = async () => {
     if (!canSubmit || busy) return;
+    if (!user) {
+      nav.navigate('SignIn');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -96,23 +100,13 @@ export default function CheckoutScreen() {
         note: note || undefined,
       });
       setProfile({ name: name.trim(), phone: phone.trim(), email: email.trim() || undefined, province, district, address: address.trim() || undefined });
-
-      const paymentMethod = method;
-      if (paymentMethod === 'mtn_momo' || paymentMethod === 'airtel_money') {
-        try {
-          await api.stubPayment({ method: paymentMethod, orderId: order.id, phone: phone.trim(), amount: order.total });
-          haptic('success');
-        } catch {
-          // The order is already placed (unpaid) — keep it, clear the cart and
-          // let the customer settle it from My Orders instead of re-checking out.
-          haptic('error');
-          cart.clear();
-          nav.navigate('Tabs', { screen: 'Orders' });
-          return;
-        }
-      }
       cart.clear();
-      nav.navigate('CheckoutSuccess', { orderNumber: order.orderNumber, total: order.total });
+      haptic('success');
+      if (method === 'cash_on_delivery') {
+        nav.navigate('CheckoutSuccess', { orderNumber: order.orderNumber, total: order.total });
+      } else {
+        nav.navigate('DemoPayment', { order });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Order failed');
     } finally {

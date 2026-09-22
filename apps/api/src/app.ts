@@ -8,12 +8,26 @@ import { errorHandler, notFound, requestLogger } from './middleware/errorHandler
 import { seedOrders } from './data/seed';
 import { initializeStore, persistStore } from './data/store';
 
+function originAllowed(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+  if (!origin) return callback(null, true);
+  if (config.corsOrigins.includes(origin)) return callback(null, true);
+  try {
+    const hostname = new URL(origin).hostname;
+    if (hostname.endsWith('.vercel.app')) return callback(null, true);
+  } catch {
+    // malformed origin — reject
+  }
+  callback(null, false);
+}
+
 export async function createApp() {
   await initializeStore();
-  seedOrders();
+  if (config.demoMode) {
+    seedOrders();
+  }
   await persistStore();
   const app = express();
-  app.use(cors({ origin: config.corsOrigins }));
+  app.use(cors({ origin: originAllowed }));
   app.use(express.json());
   app.use(requestLogger);
 

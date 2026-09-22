@@ -57,16 +57,27 @@ export const otpCodes: Map<string, { code: string; expiresAt: number }> = new Ma
 export const notifications: AppNotification[] = [];
 export const addresses: SavedAddress[] = [];
 
+/** Per-phone favourites (`phone` → list of product ids). */
+export const favoritesByPhone: Map<string, string[]> = new Map();
+/** Per-phone saved carts (`phone` → list of cart lines). */
+export const cartsByPhone: Map<string, { productId: string; qty: number }[]> = new Map();
+
+function normalizePhone(phone: string): string {
+  return (phone ?? '').replace(/\D/g, '');
+}
+
 export async function initializeStore(): Promise<void> {
   const db = await connectDatabase();
   if (!db) return;
 
-  const [storedProducts, storedOrders, storedUsers, storedNotifications, storedAddresses] = await Promise.all([
+  const [storedProducts, storedOrders, storedUsers, storedNotifications, storedAddresses, storedFavorites, storedCarts] = await Promise.all([
     db.collection<Product>('products').find().toArray(),
     db.collection<Order>('orders').find().sort({ createdAt: -1 }).toArray(),
     db.collection<CustomerUser>('users').find().toArray(),
     db.collection<AppNotification>('notifications').find().sort({ createdAt: -1 }).toArray(),
     db.collection<SavedAddress>('addresses').find().sort({ _id: -1 }).toArray(),
+    db.collection<{ phone: string; productIds: string[] }>('favorites').find().toArray(),
+    db.collection<{ phone: string; items: { productId: string; qty: number }[] }>('carts').find().toArray(),
   ]);
 
   products.clear();
@@ -76,6 +87,10 @@ export async function initializeStore(): Promise<void> {
   for (const user of storedUsers) users.set(user.phone, user);
   notifications.splice(0, notifications.length, ...storedNotifications);
   addresses.splice(0, addresses.length, ...storedAddresses);
+  favoritesByPhone.clear();
+  for (const fav of storedFavorites) favoritesByPhone.set(normalizePhone(fav.phone), fav.productIds);
+  cartsByPhone.clear();
+  for (const cart of storedCarts) cartsByPhone.set(normalizePhone(cart.phone), cart.items);
 
   if (!storedProducts.length) await db.collection<Product>('products').insertMany([...products.values()]);
 }
@@ -89,6 +104,8 @@ export async function persistStore(): Promise<void> {
     db.collection<CustomerUser>('users').deleteMany({}).then(async () => { if (users.size) await db.collection<CustomerUser>('users').insertMany([...users.values()]); }),
     db.collection<AppNotification>('notifications').deleteMany({}).then(async () => { if (notifications.length) await db.collection<AppNotification>('notifications').insertMany(notifications); }),
     db.collection<SavedAddress>('addresses').deleteMany({}).then(async () => { if (addresses.length) await db.collection<SavedAddress>('addresses').insertMany(addresses); }),
+    db.collection<{ phone: string; productIds: string[] }>('favorites').deleteMany({}).then(async () => { if (favoritesByPhone.size) await db.collection<{ phone: string; productIds: string[] }>('favorites').insertMany([...favoritesByPhone.entries()].map(([phone, productIds]) => ({ phone, productIds }))); }),
+    db.collection<{ phone: string; items: { productId: string; qty: number }[] }>('carts').deleteMany({}).then(async () => { if (cartsByPhone.size) await db.collection<{ phone: string; items: { productId: string; qty: number }[] }>('carts').insertMany([...cartsByPhone.entries()].map(([phone, items]) => ({ phone, items }))); }),
   ]);
 }
 
@@ -137,6 +154,47 @@ export function setDefaultAddress(phone: string, id: string): SavedAddress | und
   });
   persistSoon();
   return updated;
+}
+
+export function getFavoritesFor(phone: string): string[] {
+  const digits = normalizePhone(phone);
+  return favoritesByPhone.get(digits) ?? [];
+}
+
+export function setFavoritesFor(phone: string, ids: string[]): string[] {
+  const clean = Array.from(new Set((ids ?? []).filter((id) => typeof id === 'string' && id.trim().length > 0)));
+  favoritesByPhone.set(normalizePhone(phone), clean);
+  persistSoon();
+  return clean;
+}
+
+export function toggleFavorite(phone: string, productId: string): string[] {
+  const digits = normalizePhone(phone);
+  const current = favoritesByPhone.get(digits) ?? [];
+  const next = current.includes(productId) ? current.filter((x) => x !== productId) : [...current, productId];
+  favoritesByPhone.set(digits, next);
+  persistSoon();
+  return next;
+}
+
+export function getCartFor(phone: string): { productId: string; qty: number }[] {
+  return cartsByPhone.get(normalizePhone(phone)) ?? [];
+}
+
+export function setCartFor(phone: string, items: { productId: string; qty: number }[]): { productId: string; qty: number }[] {
+  const clean = (items ?? [])
+    .filter(
+      (i) =>
+        i &&
+        typeof i.productId === 'string' &&
+        i.productId.trim().length > 0 &&
+        Number.isFinite(i.qty) &&
+        i.qty > 0
+    )
+    .map((i) => ({ productId: i.productId, qty: Math.round(i.qty * 100) / 100 }));
+  cartsByPhone.set(normalizePhone(phone), clean);
+  persistSoon();
+  return clean;
 }
 
 export function upsertUser(user: CustomerUser): CustomerUser {
@@ -197,7 +255,7 @@ export const adminUser: AdminUser = {
   passwordHash: 'admin123', // TBD: replace with bcrypt hash in Phase 2
 };
 
-export function updateProduct(id: string, patch: Partial<Pick<Product, 'price' | 'stockQty' | 'organic'>>): Product | undefined {
+export function updateProduct(id: string, patch: Partial<Omit<Product, 'id'>>): Product | undefined {
   const prod = products.get(id);
   if (!prod) return undefined;
   Object.assign(prod, patch);
@@ -209,6 +267,28 @@ export function addProduct(product: Product): Product {
   products.set(product.id, product);
   persistSoon();
   return product;
+}
+
+export function deleteProduct(id: string): Product | undefined {
+  const removed = products.get(id);
+  if (!removed) return undefined;
+  products.delete(id);
+  for (const [phone, ids] of favoritesByPhone) {
+    favoritesByPhone.set(phone, ids.filter((pid) => pid !== id));
+  }
+  for (const [phone, lines] of cartsByPhone) {
+    cartsByPhone.set(phone, lines.filter((line) => line.productId !== id));
+  }
+  persistSoon();
+  return removed;
+}
+
+export function listCustomers(): CustomerUser[] {
+  return [...users.values()];
+}
+
+export function listAllNotifications(): AppNotification[] {
+  return [...notifications];
 }
 
 export function createOrder(order: Order): Order {
@@ -242,10 +322,11 @@ export function updateOrderStatus(id: string, status: OrderStatus, note?: string
   return order;
 }
 
-export function updateOrderPaymentStatus(id: string, status: Order['paymentStatus']): Order | undefined {
+export function updateOrderPaymentStatus(id: string, status: Order['paymentStatus'], providerReference?: string): Order | undefined {
   const order = orders.find((o) => o.id === id);
   if (!order) return undefined;
   order.paymentStatus = status;
+  if (providerReference) order.providerReference = providerReference;
   persistSoon();
   return order;
 }

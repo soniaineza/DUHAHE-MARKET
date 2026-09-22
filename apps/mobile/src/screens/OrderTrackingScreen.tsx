@@ -225,8 +225,7 @@ export default function OrderTrackingScreen({ route }: Props) {
   );
 }
 
-const shadowSm = {
-  shadowColor: '#0b1c2e',
+const shadowSm = {    shadowColor: '#111111',
   shadowOpacity: 0.10,
   shadowRadius: 10,
   shadowOffset: { width: 0, height: 4 },

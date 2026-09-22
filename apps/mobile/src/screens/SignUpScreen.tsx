@@ -39,8 +39,8 @@ export default function SignUpScreen() {
     } catch (e) {
       const session = demoSession(name.trim(), phone.trim());
       signIn(session.token, session.user);
-      haptic('success');
-      show(t('auth.signedIn'), 'success');
+      haptic('warning');
+      show(t('auth.demoOffline', 'Offline demo: signed in without a server account'), 'info');
       nav.goBack();
     } finally {
       setBusy(false);

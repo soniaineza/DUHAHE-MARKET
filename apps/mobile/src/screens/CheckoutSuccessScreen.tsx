@@ -11,7 +11,7 @@ import { fmtRWF } from '../components/Money';
 import Icon from '../components/Icon';
 import { haptic } from '../components/Toast';
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import { colors, fontSizes, radii, gradientAccent } from '../theme';
+import { colors, fontSizes, radii, gradientAccent, gradientCard } from '../theme';
 
 interface Props {
   route: RouteProp<RootStackParamList, 'CheckoutSuccess'>;
@@ -32,7 +32,7 @@ export default function CheckoutSuccessScreen({ route }: Props) {
   }, [scale, fade]);
 
   return (
-    <LinearGradient colors={['#f7f9fb', '#eaf4fd']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.safe}>
+    <LinearGradient colors={gradientCard} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.safe}>
       <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1 }}>
         <View style={styles.wrap}>
           <Animated.View style={{ transform: [{ scale }] }}>
@@ -73,7 +73,7 @@ export default function CheckoutSuccessScreen({ route }: Props) {
 }
 
 const shadow = {
-  shadowColor: '#0d2414',
+  shadowColor: '#111111',
   shadowOpacity: 0.25,
   shadowRadius: 16,
   shadowOffset: { width: 0, height: 8 },

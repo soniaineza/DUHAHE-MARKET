@@ -105,7 +105,7 @@ export default function AddressesScreen() {
       setItems((prev) => prev.filter((x) => x.id !== a.id));
       haptic('light');
     } catch {
-      show(t('notifications.paymentFailed'), 'error');
+      show(t('addresses.failedRemove'), 'error');
     }
   };
 

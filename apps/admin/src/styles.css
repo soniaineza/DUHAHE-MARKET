@@ -1,34 +1,51 @@
 @import "tailwindcss";
 
 @theme {
-  --color-leaf-50: #eaf8fc;
-  --color-leaf-100: #d4f0f9;
-  --color-leaf-200: #b3e6f5;
-  --color-leaf-300: #7bd2eb;
-  --color-leaf-400: #35bee3;
-  --color-leaf-500: #00c4f0;
-  --color-leaf-600: #00a9d6;
-  --color-leaf-700: #0091c0;
-  --color-leaf-800: #00739b;
-  --color-leaf-900: #065f83;
+  /*
+   * Duhahe accent — deep black (per redesign: cream canvas, black accents, no green).
+   * The "leaf" scale is kept as the token name so existing classes
+   * (bg-leaf-*, text-leaf-*) render the black/warm-neutral ramp.
+   */
+  --color-leaf-50: #ede8da;
+  --color-leaf-100: #ddd6c3;
+  --color-leaf-200: #c9c1aa;
+  --color-leaf-300: #a39e92;
+  --color-leaf-400: #77736b;
+  --color-leaf-500: #44403c;
+  --color-leaf-600: #2a2822;
+  --color-leaf-700: #111111;
+  --color-leaf-800: #000000;
+  --color-leaf-900: #000000;
 
-  --color-harvest-50: #fff8eb;
-  --color-harvest-100: #ffefc2;
-  --color-harvest-200: #ffd97a;
-  --color-harvest-300: #f7b733;
-  --color-harvest-400: #eaa222;
-  --color-harvest-500: #d97706;
-  --color-harvest-600: #b45309;
+  /* Warm amber accent (highlights, attention) */
+  --color-harvest-50: #fdf6e7;
+  --color-harvest-100: #fbebc0;
+  --color-harvest-200: #f8da84;
+  --color-harvest-300: #f4c946;
+  --color-harvest-400: #efb834;
+  --color-harvest-500: #db9f2b;
+  --color-harvest-600: #b97f14;
 
+  /*
+   * Warm editorial canvas — same system as the mobile app:
+   * cream background, near-black ink, warm gray text, beige borders.
+   */
   --color-card: #ffffff;
-  --color-bg: #f4f8fb;
-  --color-ink: #10233d;
-  --color-soft: #27394f;
-  --color-muted: #5b6b7f;
-  --color-faint: #93a3b5;
-  --color-line: #e2eaf2;
+  --color-bg: #f7f4ec;
+  --color-ink: #111111;
+  --color-soft: #2a2822;
+  --color-muted: #77736b;
+  --color-faint: #a39e92;
+  --color-line: #e5e0d3;
 
-  --font-display: "Segoe UI", system-ui, -apple-system, sans-serif;
+  /* Restrained operational status colors */
+  --color-status-pending: #b45309;
+  --color-status-packing: #0369a1;
+  --color-status-transit: #0e7490;
+  --color-status-delivered: #111111;
+  --color-status-cancelled: #6b7280;
+
+  --font-display: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
 html {
@@ -37,6 +54,7 @@ html {
 
 body {
   @apply bg-bg text-ink antialiased;
+  font-feature-settings: "tnum" 1, "lnum" 1; /* numbers align in tables/metrics */
 }
 
 ::-webkit-scrollbar {
@@ -44,25 +62,102 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cfe2ef;
-  border-radius: 8px;
+  background: #ddd6c6;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 
+/* ---------- Surfaces: flat, hairline warm borders, small radii ---------- */
+
 .card {
-  @apply bg-white rounded-2xl border border-line shadow-[0_1px_2px_rgba(13,36,20,0.04),0_4px_12px_rgba(13,36,20,0.04)];
+  @apply bg-white rounded-[10px] border border-line;
 }
 
-.card-sm {
-  @apply bg-white rounded-xl border border-line shadow-[0_1px_2px_rgba(13,36,20,0.04)];
+.panel {
+  @apply bg-white rounded-[10px] border border-line;
 }
 
 .btn-primary {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl bg-leaf-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-leaf-700 disabled:opacity-50;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg bg-leaf-700 px-4 py-2 text-sm font-semibold text-white transition-colors duration-150 hover:bg-leaf-800 disabled:opacity-50;
 }
 
 .btn-ghost {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-leaf-50;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-white px-4 py-2 text-sm font-semibold text-soft transition-colors duration-150 hover:bg-bg disabled:opacity-50;
+}
+
+.input {
+  @apply w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink transition-colors duration-150 placeholder:text-faint focus:border-leaf-600 focus:outline-none focus:ring-2 focus:ring-leaf-600/10;
+}
+
+/* ---------- Typography helpers ---------- */
+
+.page-title {
+  @apply text-xl font-bold tracking-tight text-ink;
+}
+
+.section-title {
+  @apply text-[13px] font-bold uppercase tracking-[0.06em] text-soft;
+}
+
+.metric-value {
+  @apply text-[26px] leading-tight font-bold tracking-tight text-ink;
+}
+
+.metadata {
+  @apply text-xs text-faint;
+}
+
+/* ---------- Navigation item: thin indicator, quiet background ---------- */
+
+.nav-item {
+  @apply relative flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium text-leaf-100/80 transition-colors duration-150 hover:bg-white/5 hover:text-white;
+}
+.nav-item .nav-ico {
+  @apply text-leaf-200/60 transition-colors duration-150;
+}
+.nav-item:hover .nav-ico {
+  @apply text-leaf-100;
+}
+
+.nav-item-active {
+  @apply bg-white/10 font-semibold text-white;
+}
+.nav-item-active .nav-ico {
+  @apply text-white;
+}
+
+/* ---------- Tables: dense, hairline separators ---------- */
+
+.tbl {
+  @apply w-full text-sm;
+}
+.tbl th {
+  @apply border-b border-line bg-white px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-faint;
+}
+.tbl td {
+  @apply border-b border-line/70 px-3 py-2.5 text-soft align-middle;
+}
+.tbl tbody tr {
+  @apply transition-colors duration-150;
+}
+.tbl tbody tr:hover {
+  @apply bg-harvest-50/60;
+}
+.tbl-num {
+  @apply text-right tabular-nums;
+}
+
+/* ---------- Small status dots / bars ---------- */
+
+.dot {
+  @apply inline-block h-2 w-2 shrink-0 rounded-full;
+}
+
+.bar-track {
+  @apply h-1.5 rounded-full bg-harvest-50;
+}
+.bar-fill {
+  @apply h-1.5 rounded-full bg-leaf-600;
 }

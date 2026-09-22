@@ -6,13 +6,18 @@ import { signCustomerToken, verifyCustomerToken } from '../services/authService'
 import {
   addAddress,
   consumeOtp,
+  getCartFor,
+  getFavoritesFor,
   getUserByPhone,
   listAddressesFor,
   listNotificationsFor,
   markNotificationRead,
   removeAddress,
+  setCartFor,
   setDefaultAddress,
+  setFavoritesFor,
   setOtp,
+  toggleFavorite,
   upsertUser,
 } from '../data/store';
 
@@ -162,6 +167,54 @@ customerRouter.post('/addresses/:id/default', (req, res) => {
     return;
   }
   res.json({ data: updated });
+});
+
+customerRouter.get('/favorites', (req, res) => {
+  const phone = normalizePhone(req.query.phone);
+  if (!phone) {
+    res.status(400).json({ error: 'Phone is required' });
+    return;
+  }
+  res.json({ data: { ids: getFavoritesFor(phone) } });
+});
+
+customerRouter.put('/favorites', (req, res) => {
+  const phone = normalizePhone(req.body?.phone);
+  if (!phone) {
+    res.status(400).json({ error: 'Phone is required' });
+    return;
+  }
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  res.json({ data: { ids: setFavoritesFor(phone, ids) } });
+});
+
+customerRouter.post('/favorites/toggle', (req, res) => {
+  const phone = normalizePhone(req.body?.phone);
+  const productId = typeof req.body?.productId === 'string' ? req.body.productId.trim() : '';
+  if (!phone || !productId) {
+    res.status(400).json({ error: 'Phone and productId are required' });
+    return;
+  }
+  res.json({ data: { ids: toggleFavorite(phone, productId) } });
+});
+
+customerRouter.get('/cart', (req, res) => {
+  const phone = normalizePhone(req.query.phone);
+  if (!phone) {
+    res.status(400).json({ error: 'Phone is required' });
+    return;
+  }
+  res.json({ data: { items: getCartFor(phone) } });
+});
+
+customerRouter.put('/cart', (req, res) => {
+  const phone = normalizePhone(req.body?.phone);
+  if (!phone) {
+    res.status(400).json({ error: 'Phone is required' });
+    return;
+  }
+  const items = Array.isArray(req.body?.items) ? req.body.items : [];
+  res.json({ data: { items: setCartFor(phone, items) } });
 });
 
 customerRouter.post('/orders/calculate', (req, res) => {

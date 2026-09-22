@@ -53,7 +53,7 @@ export async function initiatePayment(req: PaymentRequest): Promise<PaymentResul
     result = stubRequest(req.method, req.phone, req.amount);
   }
 
-  updateOrderPaymentStatus(order.id, result.success ? 'paid' : 'failed');
+  updateOrderPaymentStatus(order.id, result.success ? 'paid' : 'failed', result.providerRequestId);
   if (result.success && order.paymentStatus === 'paid') {
     pushNotification({
       phone: order.customer.phone,

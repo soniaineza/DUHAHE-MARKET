@@ -27,7 +27,7 @@ export default function ProductImage({ product, style, imageStyle, resizeMode = 
 
   const fadeIn = () => {
     setState('ready');
-    Animated.timing(opacity, { toValue: 1, duration: 250, useNativeDriver: true }).start();
+    Animated.timing(opacity, { toValue: 1, duration: 250, useNativeDriver: false }).start();
   };
 
   return (
@@ -41,9 +41,9 @@ export default function ProductImage({ product, style, imageStyle, resizeMode = 
           onError={() => setState('error')}
         />
       )}
-      {state === 'ready' && <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity }]} />}
+      {state === 'ready' && <Animated.View style={[StyleSheet.absoluteFill, { opacity }]} />}
       {state === 'loading' && (
-        <View pointerEvents="none" style={styles.fallback} />
+        <View style={styles.fallback} />
       )}
       {state === 'error' && (
         <View style={styles.fallback} />
