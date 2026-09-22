@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
@@ -116,6 +116,8 @@ export default function CheckoutScreen() {
 
   const provinces = PROVINCES[lang];
   const districts = DISTRICTS[lang];
+  // Edge-to-edge APK: keep the fixed Place-Order bar above the system nav bar.
+  const insets = useSafeAreaInsets();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -240,7 +242,7 @@ export default function CheckoutScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: 16 + insets.bottom }]}>
         <Pressable
           onPress={placeOrder}
           disabled={!canSubmit || busy}

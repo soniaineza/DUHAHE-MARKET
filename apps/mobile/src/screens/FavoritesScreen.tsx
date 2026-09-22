@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +18,7 @@ export default function FavoritesScreen() {
   const nav = useNavigation<Nav>();
   const { products } = useCatalog();
   const { ids } = useFavorites();
+  const insets = useSafeAreaInsets();
 
   const items = products.filter((p) => ids.includes(p.id));
 
@@ -44,7 +45,7 @@ export default function FavoritesScreen() {
           onAction={() => nav.navigate('Tabs', { screen: 'Home' })}
         />
       ) : (
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 24 + insets.bottom }]} showsVerticalScrollIndicator={false}>
           <View style={styles.grid}>
             {items.map((p) => (
               <View key={p.id} style={styles.gridItem}>

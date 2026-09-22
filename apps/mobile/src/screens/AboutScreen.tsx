@@ -31,7 +31,7 @@ export default function AboutScreen() {
   ];
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.navRow}>
         <Pressable onPress={() => nav.goBack()} hitSlop={10} style={styles.backBtn}>
           <Icon name="arrow-left" size={20} color={colors.ink} />

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
@@ -78,6 +78,9 @@ export default function ProductDetailsScreen() {
     show(product.name[lang], 'success');
   };
 
+  // Edge-to-edge APK: keep the fixed Add-to-Cart bar above the system nav bar.
+  const insets = useSafeAreaInsets();
+
   return (
     <View style={styles.safe}>
       <SafeAreaView edges={['top']} style={styles.topSafe}>
@@ -148,7 +151,7 @@ export default function ProductDetailsScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: 20 + insets.bottom }]}>
         <Pressable
           disabled={oos}
           onPress={addToCart}

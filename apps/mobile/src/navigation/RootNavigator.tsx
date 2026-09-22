@@ -2,6 +2,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import type { Order } from '@duhahe/shared';
 import Icon, { type IconName } from '../components/Icon';
@@ -78,13 +79,20 @@ function TabBarIcon({ route, focused, color }: { route: keyof TabParamList; focu
 
 function TabNavigator() {
   const { t } = useTranslation();
+  // Edge-to-edge APK: pad the fixed-height bar by the system nav-bar inset
+  // (gesture bar or 3-button nav) so labels are never covered on device.
+  const insets = useSafeAreaInsets();
+  const tabBarStyle = [
+    styles.tabBar,
+    { height: TAB_BAR_BASE_HEIGHT + insets.bottom, paddingBottom: 14 + insets.bottom },
+  ];
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle,
         tabBarLabelStyle: styles.tabLabel,
         tabBarItemStyle: styles.tabItem,
           tabBarHideOnKeyboard: true,
@@ -161,9 +169,11 @@ export default function RootNavigator() {
   );
 }
 
+const TAB_BAR_BASE_HEIGHT = 84;
+
 const styles = StyleSheet.create({
   tabBar: {
-    height: 84,
+    height: TAB_BAR_BASE_HEIGHT,
     paddingTop: 8,
     paddingBottom: 14,
     borderTopWidth: 1,

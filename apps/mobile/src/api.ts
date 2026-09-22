@@ -7,6 +7,9 @@ const PRODUCTION_API_URL = 'https://duhahe-api.onrender.com/api';
 function resolveBaseUrl(): string {
   const explicit = process.env.EXPO_PUBLIC_API_URL;
   if (explicit) return explicit.trim().replace(/\/+$/, '');
+  // Release builds (APK/AAB): always talk to the production API — never LAN/dev.
+  if (!__DEV__) return PRODUCTION_API_URL;
+  // Dev builds: hit the machine running `npm run api` on the local network.
   const hostUri = Constants.expoConfig?.hostUri;
   if (hostUri) {
     const host = hostUri.trim().split(':')[0];

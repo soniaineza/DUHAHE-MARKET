@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
@@ -34,6 +34,7 @@ export default function CategoryScreen() {
   }, [products, category, sort]);
 
   const label = t(`categories.${category}`);
+  const insets = useSafeAreaInsets();
 
   return (
     <View style={styles.safe}>
@@ -49,7 +50,7 @@ export default function CategoryScreen() {
         </SafeAreaView>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 24 + insets.bottom }]} showsVerticalScrollIndicator={false}>
         <View style={styles.banner}>
           <Image source={{ uri: categoryPhotoUrl(category as CategoryId) }} style={styles.bannerImg} resizeMode="cover" />
           <View style={styles.bannerOverlay} />

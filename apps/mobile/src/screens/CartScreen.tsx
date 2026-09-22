@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -40,8 +40,9 @@ export default function CartScreen() {
   const remaining = FREE_DELIVERY_THRESHOLD - cart.subtotal;
   const freeReached = cart.subtotal >= FREE_DELIVERY_THRESHOLD;
 
+  const insets = useSafeAreaInsets();
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Text style={styles.title}>{t('cart.title')}</Text>
         {cart.lines.length > 0 && (
@@ -109,7 +110,7 @@ export default function CartScreen() {
             })}
           </ScrollView>
 
-          <View style={styles.footer}>
+          <View style={[styles.footer, { paddingBottom: 20 + insets.bottom }]}>
             <View style={styles.summary}>
               <View style={styles.summaryRow}>
                 <Text style={styles.footerLabel}>{t('common.subtotal')}</Text>
