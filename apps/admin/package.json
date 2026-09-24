@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && xcopy D:\\Duhahe\\apps\\admin\\dist D:\\Duhahe\\dist /E /I /Y",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit"
   },
