@@ -1,6 +1,6 @@
 import type { DashboardStats, Order, OrderStatus, PaymentStatus, Product } from '@duhahe/shared';
 
-const PRODUCTION_API_URL = 'https://duhahe-api.onrender.com/api';
+const PRODUCTION_API_URL = 'https://duhahe-market-1.onrender.com/api';
 const BASE = (import.meta.env.VITE_API_URL as string) || PRODUCTION_API_URL;
 export const API_BASE = BASE;
 const TOKEN_KEY = 'duhahe_admin_token';

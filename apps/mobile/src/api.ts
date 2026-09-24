@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import type { CategoryId, Language, Order, PaymentResult, Product } from '@duhahe/shared';
 
 const API_PORT = 4000;
-const PRODUCTION_API_URL = 'https://duhahe-api.onrender.com/api';
+const PRODUCTION_API_URL = 'https://duhahe-market-1.onrender.com/api';
 
 function resolveBaseUrl(): string {
   const explicit = process.env.EXPO_PUBLIC_API_URL;
