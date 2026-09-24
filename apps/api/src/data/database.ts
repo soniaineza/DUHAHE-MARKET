@@ -11,6 +11,23 @@ export class MongoRequiredError extends Error {
   }
 }
 
+function describeMongoUri(value: string): string {
+  if (!value) return 'the server received an EMPTY MONGO_URI (variable missing or blank on the host)';
+  const masked = value.replace(/\/\/([^:/@]+):[^@]*@/, '//$1:***@');
+  const preview = masked.length > 70 ? `${masked.slice(0, 70)}…` : masked;
+  const hints: string[] = [];
+  if (/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value)) {
+    hints.push('it looks like a JWT token — a JWT belongs in JWT_SECRET, not MONGO_URI (values may have been swapped)');
+  } else if (!/^mongodb(\+srv)?:\/\//.test(value)) {
+    hints.push('it does not start with "mongodb+srv://" — paste the full Atlas connection string starting with mongodb+srv://');
+  }
+  if (/[<>]/.test(value)) {
+    hints.push('it still contains placeholder angle brackets < > (replace <password> with the real password)');
+  }
+  const hint = hints.length ? ` — ${hints.join('; ')}` : '';
+  return `the server received: "${preview}"${hint}`;
+}
+
 function databaseLabel(): string {
   return `MongoDB required but unavailable. Nothing was seeded and the API will not start.\n` +
     `Please check that MONGO_URI/MONGO_DATABASE in apps/api/.env point to a reachable cluster.\n` +
@@ -25,7 +42,14 @@ export async function connectDatabase(): Promise<Db | null> {
       console.warn('DEMO MODE: MongoDB is not configured; using the in-memory demo store.');
       return null;
     }
-    throw new MongoRequiredError('MONGO_URI is not set or still contains placeholders. ' + databaseLabel());
+    throw new MongoRequiredError(
+      `MONGO_URI is not usable: ${describeMongoUri(config.mongo.uri)}. ${databaseLabel()}`
+    );
+  }
+  if (!/^mongodb(\+srv)?:\/\//.test(config.mongo.uri)) {
+    throw new MongoRequiredError(
+      `MONGO_URI is not usable: ${describeMongoUri(config.mongo.uri)}. ${databaseLabel()}`
+    );
   }
 
   try {

@@ -6,6 +6,11 @@ const envCandidates = [path.resolve(process.cwd(), '.env'), path.resolve(process
 const envFile = envCandidates.find((candidate) => fs.existsSync(candidate));
 dotenv.config(envFile ? { path: envFile } : undefined);
 
+/** Clean common paste mistakes from dashboard/env-file values (quotes, stray spaces). */
+function cleanEnvValue(value: string | undefined): string {
+  return (value ?? '').trim().replace(/^["']+|["']+$/g, '');
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 4000),
   host: process.env.HOST ?? '0.0.0.0',
@@ -20,7 +25,9 @@ export const config = {
    */
   demoMode: process.env.DEMO_MODE === 'true',
   mongo: {
-    uri: process.env.MONGO_URI ?? '',
+    // Accept MONGO_URI (preferred) with MONGO_URL as a common misspelling fallback.
+    // Uses || (not ??) so an empty-string MONGO_URI also falls back to MONGO_URL.
+    uri: cleanEnvValue(process.env.MONGO_URI) || cleanEnvValue(process.env.MONGO_URL),
     database: process.env.MONGO_DATABASE ?? 'duhahe_market',
   },
   admin: {
