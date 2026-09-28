@@ -67,7 +67,7 @@ function TabBarIcon({ route, focused, color }: { route: keyof TabParamList; focu
   const { count } = useCart();
   return (
     <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
-      <Icon name={icons[route]} size={22} color={color} />
+      <Icon name={icons[route]} size={26} color={focused ? colors.bg : color} />
       {route === 'Cart' && count > 0 && (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
@@ -169,12 +169,12 @@ export default function RootNavigator() {
   );
 }
 
-const TAB_BAR_BASE_HEIGHT = 84;
+const TAB_BAR_BASE_HEIGHT = 92;
 
 const styles = StyleSheet.create({
   tabBar: {
     height: TAB_BAR_BASE_HEIGHT,
-    paddingTop: 8,
+    paddingTop: 10,
     paddingBottom: 14,
     borderTopWidth: 1,
     borderTopColor: colors.divider,
@@ -185,21 +185,21 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     elevation: 10,
   },
-  tabLabel: { fontSize: 10.5, fontWeight: '700', marginTop: 2 },
-  tabItem: { paddingVertical: 2, minHeight: 58 },
-  iconWrap: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18, paddingVertical: 5, borderRadius: radii.pill },
-  iconWrapActive: { backgroundColor: colors.primarySoft },
+  tabLabel: { fontSize: 12, fontWeight: '800', marginTop: 4, letterSpacing: 0.2 },
+  tabItem: { paddingVertical: 2, minHeight: 64 },
+  iconWrap: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 6, borderRadius: radii.pill },
+  iconWrapActive: { backgroundColor: colors.ink },
   badge: {
     position: 'absolute',
-    top: -4,
-    right: 10,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
+    top: -6,
+    right: 8,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
-  badgeText: { fontSize: 9, fontWeight: '900', color: colors.ink },
+  badgeText: { fontSize: 10, fontWeight: '900', color: colors.ink },
 });
