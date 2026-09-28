@@ -22,7 +22,7 @@ services:
       - key: ADMIN_EMAIL
         value: admin@duhahe.rw
       - key: ADMIN_PASSWORD
-        value: admin123
+        sync: false
       - key: ADMIN_NAME
         value: Esperance Mukabaranga
       - key: JWT_SECRET
