@@ -50,12 +50,11 @@ function CartProviderInner({ children }: { children: React.ReactNode }) {
           }
         }
       } catch {
-        // ignore corrupt storage
       } finally {
         setHydrated(true);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, []);
 
   useEffect(() => {
@@ -85,7 +84,6 @@ function CartProviderInner({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, phone]);
 
   useEffect(() => {

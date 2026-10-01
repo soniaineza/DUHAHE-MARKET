@@ -1,6 +1,4 @@
 import type { Language } from '@duhahe/shared';
-
-// Localized string tuple: [en, kin, fr]
 export type L = readonly [string, string, string];
 
 const IDX: Record<Language, number> = { en: 0, kin: 1, fr: 2 };
@@ -9,7 +7,6 @@ export function pick(l: L, lang: Language): string {
   return l[IDX[lang]];
 }
 
-// ---------------------------------------------------------------------------
 export interface SearchSuggestion {
   label: L;
   q: string;
@@ -45,7 +42,6 @@ export function pickCourier(orderId: string) {
   return COURIERS[seed % COURIERS.length];
 }
 
-// Curated ids for the Home "Popular this week" rail (fallback picks when missing).
 export const FEATURED_IDS: string[] = [
   's001', // Local rice
   'v001', // Tomatoes

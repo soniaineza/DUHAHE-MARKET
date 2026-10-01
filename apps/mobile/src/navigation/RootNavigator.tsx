@@ -5,7 +5,9 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import type { Order } from '@duhahe/shared';
+
 import Icon, { type IconName } from '../components/Icon';
+
 import HomeScreen from '../screens/HomeScreen';
 import CategoriesScreen from '../screens/CategoriesScreen';
 import CartScreen from '../screens/CartScreen';
@@ -24,6 +26,7 @@ import SignUpScreen from '../screens/SignUpScreen';
 import AddressesScreen from '../screens/AddressesScreen';
 import AccountScreen from '../screens/AccountScreen';
 import FavoritesScreen from '../screens/FavoritesScreen';
+
 import { useCart } from '../context/CartContext';
 import { colors, radii } from '../theme';
 
@@ -63,14 +66,30 @@ const icons: Record<keyof TabParamList, IconName> = {
   Account: 'account-circle-outline',
 };
 
-function TabBarIcon({ route, focused, color }: { route: keyof TabParamList; focused: boolean; color: string }) {
+function TabBarIcon({
+  route,
+  focused,
+  color,
+}: {
+  route: keyof TabParamList;
+  focused: boolean;
+  color: string;
+}) {
   const { count } = useCart();
+
   return (
     <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
-      <Icon name={icons[route]} size={26} color={focused ? colors.bg : color} />
+      <Icon
+        name={icons[route]}
+        size={24}
+        color={focused ? colors.surface : color}
+      />
+
       {route === 'Cart' && count > 0 && (
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
+          <Text style={styles.badgeText}>
+            {count > 99 ? '99+' : count}
+          </Text>
         </View>
       )}
     </View>
@@ -79,13 +98,16 @@ function TabBarIcon({ route, focused, color }: { route: keyof TabParamList; focu
 
 function TabNavigator() {
   const { t } = useTranslation();
-  // Edge-to-edge APK: pad the fixed-height bar by the system nav-bar inset
-  // (gesture bar or 3-button nav) so labels are never covered on device.
   const insets = useSafeAreaInsets();
+
   const tabBarStyle = [
     styles.tabBar,
-    { height: TAB_BAR_BASE_HEIGHT + insets.bottom, paddingBottom: 14 + insets.bottom },
+    {
+      height: TAB_BAR_BASE_HEIGHT + insets.bottom,
+      paddingBottom: 14 + insets.bottom,
+    },
   ];
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -95,7 +117,7 @@ function TabNavigator() {
         tabBarStyle,
         tabBarLabelStyle: styles.tabLabel,
         tabBarItemStyle: styles.tabItem,
-          tabBarHideOnKeyboard: true,
+        tabBarHideOnKeyboard: true,
         sceneStyle: { backgroundColor: colors.bg },
       }}
     >
@@ -104,39 +126,73 @@ function TabNavigator() {
         component={HomeScreen}
         options={{
           tabBarLabel: t('tabs.home'),
-          tabBarIcon: ({ focused, color }) => <TabBarIcon route="Home" focused={focused} color={color} />,
+          tabBarIcon: ({ focused, color }) => (
+            <TabBarIcon
+              route="Home"
+              focused={focused}
+              color={color}
+            />
+          ),
         }}
       />
+
       <Tab.Screen
         name="Categories"
         component={CategoriesScreen}
         options={{
           tabBarLabel: t('tabs.categories'),
-          tabBarIcon: ({ focused, color }) => <TabBarIcon route="Categories" focused={focused} color={color} />,
+          tabBarIcon: ({ focused, color }) => (
+            <TabBarIcon
+              route="Categories"
+              focused={focused}
+              color={color}
+            />
+          ),
         }}
       />
+
       <Tab.Screen
         name="Orders"
         component={OrdersScreen}
         options={{
           tabBarLabel: t('tabs.orders'),
-          tabBarIcon: ({ focused, color }) => <TabBarIcon route="Orders" focused={focused} color={color} />,
+          tabBarIcon: ({ focused, color }) => (
+            <TabBarIcon
+              route="Orders"
+              focused={focused}
+              color={color}
+            />
+          ),
         }}
       />
+
       <Tab.Screen
         name="Cart"
         component={CartScreen}
         options={{
           tabBarLabel: t('tabs.cart'),
-          tabBarIcon: ({ focused, color }) => <TabBarIcon route="Cart" focused={focused} color={color} />,
+          tabBarIcon: ({ focused, color }) => (
+            <TabBarIcon
+              route="Cart"
+              focused={focused}
+              color={color}
+            />
+          ),
         }}
       />
+
       <Tab.Screen
         name="Account"
         component={AccountScreen}
         options={{
           tabBarLabel: t('tabs.account'),
-          tabBarIcon: ({ focused, color }) => <TabBarIcon route="Account" focused={focused} color={color} />,
+          tabBarIcon: ({ focused, color }) => (
+            <TabBarIcon
+              route="Account"
+              focused={focused}
+              color={color}
+            />
+          ),
         }}
       />
     </Tab.Navigator>
@@ -152,19 +208,87 @@ export default function RootNavigator() {
       }}
     >
       <Stack.Screen name="Tabs" component={TabNavigator} />
-      <Stack.Screen name="SignIn" component={SignInScreen} options={{ animation: 'fade' }} />
-      <Stack.Screen name="SignUp" component={SignUpScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="ProductDetails" component={ProductDetailsScreen} options={{ animation: 'slide_from_right', presentation: 'card' }} />
-      <Stack.Screen name="Category" component={CategoryScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="Search" component={SearchScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ animation: 'slide_from_bottom' }} />
-      <Stack.Screen name="DemoPayment" component={DemoPaymentScreen} options={{ animation: 'fade' }} />
-      <Stack.Screen name="CheckoutSuccess" component={CheckoutSuccessScreen} options={{ animation: 'fade' }} />
-      <Stack.Screen name="About" component={AboutScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="Tracking" component={OrderTrackingScreen} options={{ animation: 'fade' }} />
-      <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="Addresses" component={AddressesScreen} options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="Favorites" component={FavoritesScreen} options={{ animation: 'slide_from_right' }} />
+
+      <Stack.Screen
+        name="SignIn"
+        component={SignInScreen}
+        options={{ animation: 'fade' }}
+      />
+
+      <Stack.Screen
+        name="SignUp"
+        component={SignUpScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+
+      <Stack.Screen
+        name="ProductDetails"
+        component={ProductDetailsScreen}
+        options={{
+          animation: 'slide_from_right',
+          presentation: 'card',
+        }}
+      />
+
+      <Stack.Screen
+        name="Category"
+        component={CategoryScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+
+      <Stack.Screen
+        name="Search"
+        component={SearchScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+
+      <Stack.Screen
+        name="Checkout"
+        component={CheckoutScreen}
+        options={{ animation: 'slide_from_bottom' }}
+      />
+
+      <Stack.Screen
+        name="DemoPayment"
+        component={DemoPaymentScreen}
+        options={{ animation: 'fade' }}
+      />
+
+      <Stack.Screen
+        name="CheckoutSuccess"
+        component={CheckoutSuccessScreen}
+        options={{ animation: 'fade' }}
+      />
+
+      <Stack.Screen
+        name="About"
+        component={AboutScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+
+      <Stack.Screen
+        name="Tracking"
+        component={OrderTrackingScreen}
+        options={{ animation: 'fade' }}
+      />
+
+      <Stack.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+
+      <Stack.Screen
+        name="Addresses"
+        component={AddressesScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+
+      <Stack.Screen
+        name="Favorites"
+        component={FavoritesScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
     </Stack.Navigator>
   );
 }
@@ -185,10 +309,31 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     elevation: 10,
   },
-  tabLabel: { fontSize: 12, fontWeight: '800', marginTop: 4, letterSpacing: 0.2 },
-  tabItem: { paddingVertical: 2, minHeight: 64 },
-  iconWrap: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 6, borderRadius: radii.pill },
-  iconWrapActive: { backgroundColor: colors.ink },
+
+  tabLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 4,
+    letterSpacing: 0.2,
+  },
+
+  tabItem: {
+    paddingVertical: 2,
+    minHeight: 64,
+  },
+
+  iconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+  },
+
+  iconWrapActive: {
+    backgroundColor: colors.ink,
+  },
+
   badge: {
     position: 'absolute',
     top: -6,
@@ -201,5 +346,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
-  badgeText: { fontSize: 10, fontWeight: '900', color: colors.ink },
+
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: colors.ink,
+  },
 });

@@ -1,13 +1,4 @@
 import type { CategoryId, Product } from '@duhahe/shared';
-
-/**
- * Real product photography.
- *
- * Every product ID gets its own close-match photo (176 IDs, one per catalog
- * item). All IDs were verified: `images.unsplash.com/...?auto=format&fit=crop`
- * returns 200 image/*, and the photo's alt text was checked against the
- * product name. Anything un-mapped falls back to its category photo.
- */
 const photo = (id: string) =>
   `https://images.unsplash.com/${id}?auto=format&fit=crop&w=720&q=80`;
 
@@ -23,7 +14,6 @@ export const categoryPhoto: Record<CategoryId, string> = {
 };
 
 export const productPhoto: Record<string, string> = {
-  // ---------------------------------------------------------------- Staples
   s001: photo('photo-1597958792579-bd3517df6399'), // local rice
   s002: photo('photo-1645331465778-eb409d112198'), // imported rice
   s004: photo('photo-1613728913293-c99bb00ef39c'), // maize flour
@@ -74,7 +64,6 @@ export const productPhoto: Record<string, string> = {
   s070: photo('photo-1586137712370-9b450509c587'), // soy flour
   s071: photo('photo-1581600140682-d4e68c8cde32'), // mixed spices
 
-  // ------------------------------------------------------------- Vegetables
   v001: photo('photo-1582284540020-8acbe03f4924'), // tomatoes
   v002: photo('photo-1585849834908-3481231155e8'), // white onions
   v003: photo('photo-1618512496248-a07fe83aa8cb'), // red onions
@@ -106,7 +95,6 @@ export const productPhoto: Record<string, string> = {
   v036: photo('photo-1663921801167-b522c11d6cf4'), // pumpkin leaves
   v037: photo('photo-1730433267235-ed682d9346f9'), // yellow bell pepper
 
-  // ----------------------------------------------------------------- Fruits
   f001: photo('photo-1519162808019-7de1683fa2ad'), // avocado
   f002: photo('photo-1603833665858-e61d17a86224'), // sweet bananas
   f003: photo('photo-1617631716600-6a454b430367'), // plantains
@@ -138,7 +126,6 @@ export const productPhoto: Record<string, string> = {
   f035: photo('photo-1660418056478-66fa71ceb526'), // mulberry
   f036: photo('photo-1577069861033-55d04cec4ef5'), // raspberry
 
-  // ------------------------------------------------------------ Kitchenware
   k001: photo('photo-1518737003272-dac7c4760d5e'), // cooking pot
   k002: photo('photo-1624031000828-dba1b7a3e4ce'), // frying pan
   k003: photo('photo-1579892876770-461a88bd87df'), // wooden spoon set
@@ -158,7 +145,6 @@ export const productPhoto: Record<string, string> = {
   k017: photo('photo-1708392173751-35e937253100'), // settling basin
   k018: photo('photo-1586797166778-7cb76a618157'), // measuring cups
 
-  // -------------------------------------------------------------- Household
   h001: photo('photo-1607006344152-62699f97b42c'), // laundry soap bar
   h002: photo('photo-1624372635277-283042097f31'), // washing detergent
   h003: photo('photo-1590610994353-7b0e7546e681'), // dishwashing liquid

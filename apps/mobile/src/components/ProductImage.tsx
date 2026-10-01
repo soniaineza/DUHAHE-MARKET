@@ -6,16 +6,10 @@ import { productPhotoUrl } from '../lib/productImage';
 
 interface Props {
   product: Product;
-  /** Outer container box (position + dimensions). */
   style?: StyleProp<ViewStyle>;
-  /** Applied to the <Image> (e.g. borderRadius). */
   imageStyle?: StyleProp<ImageStyle>;
   resizeMode?: 'cover' | 'contain';
 }
-
-/**
- * Real product photography with a branded fallback while loading or offline.
- */
 export default function ProductImage({ product, style, imageStyle, resizeMode = 'cover' }: Props) {
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const opacity = useRef(new Animated.Value(0)).current;

@@ -40,8 +40,6 @@ const styles = StyleSheet.create({
 });
 
 export default function App() {
-  // Remount AppInner to re-run useFonts when the user taps "Try again" —
-  // a failed font load previously fell through and rendered blank icons.
   const [fontAttempt, setFontAttempt] = useState(0);
   return <AppInner key={fontAttempt} onRetryFonts={() => setFontAttempt((n) => n + 1)} />;
 }

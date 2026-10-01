@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Icon from './Icon';
 import { colors, radii } from '../theme';
 
 interface Props {
@@ -21,7 +21,7 @@ export default function LogoMark({ size = 'md', dark = false, showWordmark = tru
         end={{ x: 1, y: 1 }}
         style={[styles.tile, { width: px, height: px, borderRadius: px * 0.28 }]}
       >
-        <MaterialCommunityIcons name="basket-fill" size={px * 0.55} color="#ffffff" />
+        <Icon name="basket-fill" size={px * 0.55} color="#ffffff" />
       </LinearGradient>
       {showWordmark && (
         <View style={styles.wordWrap}>

@@ -1,13 +1,7 @@
 import type { CategoryId, Product } from '@duhahe/shared';
 import type { IconName } from '../components/Icon';
 
-/**
- * Product placeholder art.
- *
- * Every product gets its own food/kitchen icon (blue gradient + white icon),
- * so each tile reads as the actual item. The icon is chosen from an exact
- * per-product map, falling back to a per-emoji map, then per-category.
- */
+
 export interface ProductArt {
   icon: IconName;
   c1: string;
@@ -28,9 +22,7 @@ export const categoryArt: Record<CategoryId, ProductArt> = {
   other: { icon: 'candle', c1: BLUE_C1, c2: BLUE_C2 },
 };
 
-/** Exact icon per product so each food shows its own icon. */
 const productById: Record<string, IconName> = {
-  // Staples
   s001: 'rice',
   s002: 'rice',
   s004: 'corn',
@@ -80,8 +72,6 @@ const productById: Record<string, IconName> = {
   s069: 'peanut-outline',
   s070: 'seed',
   s071: 'shaker-outline',
-
-  // Vegetables
   v001: 'food-apple',
   v002: 'circle-slice-8',
   v003: 'circle-slice-8',
@@ -112,8 +102,6 @@ const productById: Record<string, IconName> = {
   v035: 'corn',
   v036: 'leaf',
   v037: 'chili-mild',
-
-  // Fruits
   f001: 'fruit-pear',
   f002: 'fruit-citrus',
   f003: 'fruit-citrus',
@@ -144,8 +132,6 @@ const productById: Record<string, IconName> = {
   f034: 'fruit-citrus',
   f035: 'fruit-cherries',
   f036: 'fruit-cherries',
-
-  // Kitchenware
   k001: 'pot',
   k002: 'pan',
   k003: 'silverware-clean',
@@ -165,8 +151,6 @@ const productById: Record<string, IconName> = {
   k017: 'water',
   k018: 'cup-outline',
 };
-
-/** Fallback icon per emoji for any product not in the exact map. */
 const art: Record<string, IconName> = {
   '🍚': 'rice',
   '🌾': 'grain',
