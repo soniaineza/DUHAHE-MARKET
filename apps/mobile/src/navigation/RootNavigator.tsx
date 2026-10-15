@@ -325,8 +325,8 @@ const styles = StyleSheet.create({
   iconWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    width: 48,
+    height: 36,
     borderRadius: radii.pill,
   },
 

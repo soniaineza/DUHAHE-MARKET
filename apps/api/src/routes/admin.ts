@@ -3,7 +3,7 @@ import type { OrderStatus } from '@duhahe/shared';
 import { requireAdmin } from '../middleware/auth';
 import { login } from '../services/authService';
 import { listOrders, getOrderById } from '../services/orderService';
-import { addProduct, deleteProduct, updateOrderPaymentStatus, updateOrderStatus, updateProduct, products, listCustomers, listAllNotifications, listAddressesFor, listNotificationsFor, pushNotification } from '../data/store';
+import { addProduct, deleteProduct, updateOrderPaymentStatus, updateOrderStatus, updateProduct, products, listCustomers, listAllNotifications, listAddressesFor, listNotificationsFor, pushNotification, addresses, notifications, favoritesByPhone, cartsByPhone } from '../data/store';
 import type { CategoryId, PaymentStatus, Product, Unit } from '@duhahe/shared';
 import { computeStats, todayVsYesterday } from '../services/analyticsService';
 import { getProduct } from '../services/productService';
@@ -236,4 +236,37 @@ adminRouter.patch('/orders/:id/payment', (req, res) => {
     });
   }
   res.json({ data: order });
+});
+
+/**
+ * Full JSON backup of every collection this API stores (admin-only, JWT
+ * required). Gives the business a point-in-time copy of orders, customers,
+ * inventory, addresses, notifications and carts that is independent of the
+ * database host's own retention/backups. Download it manually or wire it into
+ * a cron job.
+ */
+adminRouter.get('/export', (_req, res) => {
+  const exportedAt = new Date().toISOString();
+  res.setHeader('Content-Disposition', `attachment; filename="duhahe-backup-${exportedAt.replace(/[:.]/g, '-')}.json"`);
+  res.json({
+    data: {
+      exportedAt,
+      counts: {
+        products: products.size,
+        orders: listOrders().length,
+        customers: listCustomers().length,
+        addresses: addresses.length,
+        notifications: notifications.length,
+        favorites: favoritesByPhone.size,
+        carts: cartsByPhone.size,
+      },
+      products: [...products.values()],
+      orders: listOrders(),
+      customers: listCustomers(),
+      addresses,
+      notifications: listAllNotifications(),
+      favorites: [...favoritesByPhone.entries()].map(([phone, productIds]) => ({ phone, productIds })),
+      carts: [...cartsByPhone.entries()].map(([phone, items]) => ({ phone, items })),
+    },
+  });
 });

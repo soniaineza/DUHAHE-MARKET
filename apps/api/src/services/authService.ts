@@ -1,6 +1,14 @@
+import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import type { CustomerUser } from '../data/store';
+
+/** Constant-time string compare (hash first so length differences leak nothing). */
+function safeEqual(a: string, b: string): boolean {
+  const ha = crypto.createHash('sha256').update(String(a)).digest();
+  const hb = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
 
 export interface AdminTokenPayload {
   sub: string;
@@ -17,8 +25,10 @@ export interface CustomerTokenPayload {
 }
 
 export function login(email: string, password: string): { token: string; admin: AdminTokenPayload } | null {
-  if (email.toLowerCase() !== config.admin.email.toLowerCase()) return null;
-  if (password !== config.admin.password) return null;
+  // Both comparisons are constant-time so response timing cannot be used to
+  // guess the admin email or password byte by byte.
+  if (!safeEqual(email.toLowerCase(), config.admin.email.toLowerCase())) return null;
+  if (!safeEqual(password, config.admin.password)) return null;
   const payload: AdminTokenPayload = {
     sub: 'admin-1',
     email: config.admin.email,

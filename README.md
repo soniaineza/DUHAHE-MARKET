@@ -105,11 +105,35 @@ GET  /api/admin/orders/:id/payment
 PATCH /api/admin/orders/:id/payment   { paymentStatus, note? }
 GET  /api/admin/customers
 GET  /api/admin/notifications?phone=
+GET  /api/admin/export           full JSON backup of every collection (JWT)
 GET  /api/admin/inventory
 POST /api/admin/inventory
 PATCH /api/admin/inventory/:id        full product fields (name/description/category/unit/farmer/emoji/minOrderQty/step/price/stockQty/organic)
 DELETE /api/admin/inventory/:id       hard delete (also removed from favourites & saved carts)
 ```
+
+## Security & data durability
+
+**Payment amounts are server-authoritative.** `/api/payments/stub` accepts a client amount only if it **exactly equals the order total** computed by the server at checkout; the charge always goes to `order.customer.phone` (mismatched phone → rejected); an already-paid order can never be charged twice; and the Paypack webhook/sync mark an order `paid` **only when the reported amount matches `order.total`** — mismatches are logged and flagged (`amountMismatch: true`) instead of settled.
+
+**Data-loss protection (MongoDB).**
+- Persistence **upserts every document first** and only afterwards removes keys that no longer exist in memory, so a crash mid-sync can never wipe a collection (the old delete-all-then-reinsert window is gone).
+- Writes are debounced/coalesced, **retried automatically** after transient DB errors, and **flushed on `SIGTERM`/`SIGINT`** (Render deploys/restarts) before the process exits.
+- **`DEMO_MODE=true` never writes to a database** — a demo run can't overwrite production rows. In production the API **refuses to start** if `DEMO_MODE=true`, `JWT_SECRET` is missing/default/short, or `ADMIN_PASSWORD` is missing or weak.
+- Unique indexes on `users.phone`, `orders.id`, `products.id`, `favorites.phone`, `carts.phone` (best-effort, logged if historic data blocks them).
+- `GET /api/admin/export` (Bearer JWT) downloads a complete JSON backup of every collection — schedule it or run it after busy days. Also enable **Atlas snapshots/regular backups** for the cluster itself: the app can protect against crashes, only the database host can protect against accidental cluster deletion.
+
+**Other hardening.**
+- Rate limits: 300 req/min for the whole API + 10/10 min on auth endpoints (webhooks & health excluded), `trust proxy` set correctly for Render.
+- Security headers (`nosniff`, `X-Frame-Options`, `Referrer-Policy`, HSTS in production), `X-Powered-By` disabled, 100 KB JSON body limit.
+- CORS: production trusts only the explicit `CORS_ORIGINS` list — the `*.vercel.app` wildcard is **dev-only** (add preview deployment URLs to `CORS_ORIGINS` if you need them).
+- Constant-time admin credential comparison; JWT required for all `/api/admin/*` except login; webhook HMAC verified against the raw body with `timingSafeEqual`; internal 5xx messages are never echoed to clients in production.
+
+**Known limitations (deliberate demo trade-offs).**
+- Customer data endpoints (cart, favourites, addresses, notifications, order history) are keyed by phone number without a token — convenient for a guest-friendly demo, but the next hardening step is SMS OTP + token enforcement.
+- OTP sign-in returns the code in the API response (no SMS provider yet). It is rate-limited, but replace with real SMS before launch.
+
+**Verification scripts:** `node smoke-test.mjs` (35 end-to-end checks: payments, webhooks, CORS, headers, auth, errors — run against a `DEMO_MODE=true` instance) and `node durability-test.mjs` (crash + restart durability against an ephemeral local MongoDB; needs `npm i --no-save mongodb-memory-server` and a fast link — it downloads a ~780 MB mongod binary on first run). See each file's header for details.
 
 ## Phase 2 — Production hardening (next steps)
 

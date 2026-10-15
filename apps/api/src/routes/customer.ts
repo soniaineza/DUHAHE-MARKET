@@ -260,10 +260,16 @@ customerRouter.get('/orders/:phone/recent', (req, res) => {
 
 customerRouter.post('/payments/stub', async (req, res) => {
   const { method, orderId, phone, amount } = req.body ?? {};
-  if (!orderId || !phone || !amount) {
+  if (!orderId || !phone || amount === undefined || amount === null || amount === '') {
     res.status(400).json({ error: 'orderId, phone and amount are required' });
     return;
   }
+  if (!Number.isFinite(Number(amount))) {
+    res.status(400).json({ error: 'amount must be a number' });
+    return;
+  }
+  // NOTE: the amount is only a client claim — paymentService rejects it unless
+  // it exactly equals the order total computed by the server.
   const m = METHODS.includes(method) ? method : 'mtn_momo';
   try {
     const result = await initiatePayment({ method: m, orderId: String(orderId), phone: String(phone), amount: Number(amount) });

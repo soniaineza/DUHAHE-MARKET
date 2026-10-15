@@ -1,4 +1,6 @@
 import { PRODUCTS, type Order, type OrderStatus, type Product } from '@duhahe/shared';
+import type { Db } from 'mongodb';
+import { config } from '../config';
 import { connectDatabase, getDatabase } from './database';
 
 /**
@@ -38,14 +40,6 @@ export interface SavedAddress {
   isDefault: boolean;
 }
 
-interface AdminUser {
-  id: string;
-  name: string;
-  email: string;
-  role: 'admin';
-  passwordHash: string;
-}
-
 export const products: Map<string, Product> = new Map(
   PRODUCTS.map((prod) => [prod.id, { ...prod }])
 );
@@ -66,9 +60,15 @@ function normalizePhone(phone: string): string {
   return (phone ?? '').replace(/\D/g, '');
 }
 
+/** True once the in-memory store reflects a completed load (authoritative). */
+let storeLoaded = false;
+
 export async function initializeStore(): Promise<void> {
   const db = await connectDatabase();
-  if (!db) return;
+  if (!db) {
+    storeLoaded = true;
+    return;
+  }
 
   const [storedProducts, storedOrders, storedUsers, storedNotifications, storedAddresses, storedFavorites, storedCarts] = await Promise.all([
     db.collection<Product>('products').find().toArray(),
@@ -93,28 +93,152 @@ export async function initializeStore(): Promise<void> {
   for (const cart of storedCarts) cartsByPhone.set(normalizePhone(cart.phone), cart.items);
 
   if (!storedProducts.length) await db.collection<Product>('products').insertMany([...products.values()]);
+  await ensureIndexes(db);
+  storeLoaded = true;
 }
 
+/**
+ * Unique identity per document: duplicates in the DB would break the
+ * upsert-based sync, so enforce it up front. Best-effort — if historic data
+ * already contains duplicates we log and continue instead of refusing to boot.
+ */
+async function ensureIndexes(db: Db): Promise<void> {
+  const results = await Promise.allSettled([
+    db.collection('users').createIndex({ phone: 1 }, { unique: true }),
+    db.collection('orders').createIndex({ id: 1 }, { unique: true }),
+    db.collection('products').createIndex({ id: 1 }, { unique: true }),
+    db.collection('favorites').createIndex({ phone: 1 }, { unique: true }),
+    db.collection('carts').createIndex({ phone: 1 }, { unique: true }),
+  ]);
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      console.warn('MongoDB index not created (continuing):', result.reason instanceof Error ? result.reason.message : result.reason);
+    }
+  }
+}
+
+/**
+ * Persist the in-memory store to MongoDB.
+ *
+ * Data-loss prevention rules:
+ *  1. NEVER delete-all-then-reinsert. Every document is written with an
+ *     UPSERT first; only keys that no longer exist in memory are removed
+ *     afterwards, and only after the upserts succeeded. A crash mid-sync can
+ *     therefore never wipe a collection.
+ *  2. DEMO_MODE never writes. A demo run must not be able to overwrite
+ *     production data with seeded/demo rows.
+ *  3. The sync is idempotent, so automatic retries after failures are safe.
+ */
 export async function persistStore(): Promise<void> {
   const db = getDatabase();
-  if (!db) return;
-  await Promise.all([
-    db.collection<Product>('products').deleteMany({}).then(() => db.collection<Product>('products').insertMany([...products.values()])),
-    db.collection<Order>('orders').deleteMany({}).then(async () => { if (orders.length) await db.collection<Order>('orders').insertMany(orders); }),
-    db.collection<CustomerUser>('users').deleteMany({}).then(async () => { if (users.size) await db.collection<CustomerUser>('users').insertMany([...users.values()]); }),
-    db.collection<AppNotification>('notifications').deleteMany({}).then(async () => { if (notifications.length) await db.collection<AppNotification>('notifications').insertMany(notifications); }),
-    db.collection<SavedAddress>('addresses').deleteMany({}).then(async () => { if (addresses.length) await db.collection<SavedAddress>('addresses').insertMany(addresses); }),
-    db.collection<{ phone: string; productIds: string[] }>('favorites').deleteMany({}).then(async () => { if (favoritesByPhone.size) await db.collection<{ phone: string; productIds: string[] }>('favorites').insertMany([...favoritesByPhone.entries()].map(([phone, productIds]) => ({ phone, productIds }))); }),
-    db.collection<{ phone: string; items: { productId: string; qty: number }[] }>('carts').deleteMany({}).then(async () => { if (cartsByPhone.size) await db.collection<{ phone: string; items: { productId: string; qty: number }[] }>('carts').insertMany([...cartsByPhone.entries()].map(([phone, items]) => ({ phone, items }))); }),
-  ]);
+  if (!db || config.demoMode) return;
+  if (!storeLoaded) {
+    console.warn('persistStore skipped: the store has not finished loading.');
+    return;
+  }
+  await syncCollection(db, 'products', 'id', [...products.values()]);
+  await syncCollection(db, 'orders', 'id', orders);
+  await syncCollection(db, 'users', 'phone', [...users.values()]);
+  await syncCollection(db, 'notifications', 'id', notifications);
+  await syncCollection(db, 'addresses', 'id', addresses);
+  await syncCollection(db, 'favorites', 'phone', [...favoritesByPhone.entries()].map(([phone, productIds]) => ({ phone, productIds })));
+  await syncCollection(db, 'carts', 'phone', [...cartsByPhone.entries()].map(([phone, items]) => ({ phone, items })));
 }
 
-let persistenceQueue = Promise.resolve();
+/** Upsert every document, then delete only keys that are gone from memory. */
+async function syncCollection(db: Db, name: string, key: string, docs: object[]): Promise<void> {
+  const byKey = new Map<unknown, Record<string, unknown>>();
+  for (const doc of docs) {
+    const copy: Record<string, unknown> = { ...(doc as Record<string, unknown>) };
+    delete copy._id; // let MongoDB keep the existing _id when replacing
+    byKey.set(copy[key], copy); // duplicate keys collapse to one (last wins)
+  }
+  const rows = [...byKey.values()];
+  if (rows.length) {
+    await db.collection(name).bulkWrite(
+      rows.map((doc) => ({
+        replaceOne: { filter: { [key]: doc[key] }, replacement: doc, upsert: true },
+      })),
+      { ordered: false }
+    );
+    await db.collection(name).deleteMany({ [key]: { $nin: rows.map((doc) => doc[key]) } });
+  } else {
+    // Memory says the collection is empty; only reachable after a full load.
+    await db.collection(name).deleteMany({});
+  }
+}
 
-function persistSoon(): void {
-  persistenceQueue = persistenceQueue
-    .then(() => persistStore())
-    .catch((error) => console.error('MongoDB persistence error:', error));
+/**
+ * Debounced, coalesced persistence:
+ *  - mutations only mark the store dirty and start a short timer, so a burst of
+ *    writes results in ONE sync of the latest state;
+ *  - a failed sync is retried automatically, so a transient MongoDB blip never
+ *    silently drops a change until the next unrelated mutation;
+ *  - flushStore() forces a final sync on graceful shutdown.
+ */
+let persistenceQueue = Promise.resolve();
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let dirty = false;
+let flushing = false;
+
+function runPendingPersist(): Promise<void> {
+  if (!dirty) return persistenceQueue;
+  dirty = false;
+  persistenceQueue = persistenceQueue.then(async () => {
+    try {
+      await persistStore();
+    } catch (error) {
+      dirty = true;
+      console.error('MongoDB persistence error:', error);
+      if (!flushing && !retryTimer) {
+        retryTimer = setTimeout(() => {
+          retryTimer = null;
+          void runPendingPersist();
+        }, 5000);
+        retryTimer.unref?.();
+        console.warn('MongoDB persistence retry scheduled in 5s.');
+      }
+    }
+  });
+  return persistenceQueue;
+}
+
+function persistSoon(delay = 400): void {
+  dirty = true;
+  if (flushTimer) return;
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    void runPendingPersist();
+  }, delay);
+  flushTimer.unref?.();
+}
+
+/** Force pending changes into MongoDB (graceful shutdown / final sync). */
+export async function flushStore(): Promise<void> {
+  flushing = true;
+  try {
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+    // One retry on shutdown in case the first attempt hits a blip.
+    for (let attempt = 1; attempt <= 2 && dirty; attempt += 1) {
+      await runPendingPersist();
+      await persistenceQueue;
+      if (dirty && attempt < 2) console.warn('flushStore: attempt failed, retrying once…');
+    }
+    // Always wait for a sync that may already be in flight (its timer was
+    // consumed before shutdown started) so it finishes before we close the DB.
+    await persistenceQueue;
+    if (dirty) console.error('flushStore: store still dirty — some changes may not be saved.');
+  } finally {
+    flushing = false;
+  }
 }
 
 export function listAddressesFor(phone: string): SavedAddress[] {
@@ -246,14 +370,6 @@ export function markNotificationRead(id: string): AppNotification | undefined {
   persistSoon();
   return note;
 }
-
-export const adminUser: AdminUser = {
-  id: 'admin-1',
-  name: 'Esperance Mukabaranga',
-  email: 'admin@duhahe.rw',
-  role: 'admin',
-  passwordHash: 'admin123', // TBD: replace with bcrypt hash in Phase 2
-};
 
 export function updateProduct(id: string, patch: Partial<Omit<Product, 'id'>>): Product | undefined {
   const prod = products.get(id);
