@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { Request, Response } from 'express';
 import type { PaymentMethod } from '@duhahe/shared';
 import { calculateOrder, createOrderFromInput, listOrders } from '../services/orderService';
 import { initiatePayment } from '../services/paymentService';
@@ -285,7 +286,7 @@ customerRouter.get('/orders/:phone/recent', (req, res) => {
   res.json({ data: mine });
 });
 
-customerRouter.post('/payments/stub', async (req, res) => {
+const createPaymentHandler = async (req: Request, res: Response) => {
   const { method, orderId, phone, amount } = req.body ?? {};
   if (!orderId || !phone || amount === undefined || amount === null || amount === '') {
     res.status(400).json({ error: 'orderId, phone and amount are required' });
@@ -304,4 +305,7 @@ customerRouter.post('/payments/stub', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Payment failed' });
   }
-});
+};
+
+customerRouter.post('/payments/create', createPaymentHandler);
+customerRouter.post('/payments/stub', createPaymentHandler);
