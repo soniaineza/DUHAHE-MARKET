@@ -68,7 +68,7 @@ export default function AccountScreen() {
           <MenuItem icon="receipt-text-outline" label={t('profileMenu.orders')} onPress={() => nav.navigate('Tabs', { screen: 'Orders' })} />
           <MenuItem icon="map-marker-outline" label={t('profileMenu.addresses')} onPress={() => nav.navigate('Addresses')} />
           <MenuItem icon="heart-outline" label={t('profileMenu.favorites')} onPress={() => nav.navigate('Favorites')} />
-          <MenuItem icon="credit-card-outline" label={t('profileMenu.payments')} onPress={() => notifySoon(t('payment.thisIsDemo'))} />
+          <MenuItem icon="credit-card-outline" label={t('profileMenu.payments')} onPress={() => notifySoon(t('payment.paymentsAvailable'))} />
           <MenuItem icon="translate" label={t('profileMenu.language')} onPress={() => setLangOpen((v) => !v)} open={langOpen} />
           <MenuItem icon="information-outline" label={t('profileMenu.about')} onPress={() => { haptic('light'); nav.navigate('About'); }} />
           {signedIn && (

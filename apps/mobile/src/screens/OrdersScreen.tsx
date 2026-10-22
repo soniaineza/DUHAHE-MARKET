@@ -66,7 +66,7 @@ export default function OrdersScreen() {
 
   const payNow = async (o: Order) => {
     try {
-      await api.stubPayment({ method: 'mtn_momo', orderId: o.id, phone: o.customer.phone, amount: o.total });
+      await api.createPayment({ method: 'mtn_momo', orderId: o.id, phone: o.customer.phone, amount: o.total });
       haptic('success');
       show(t('notifications.orderPaid'), 'success');
       load(true);

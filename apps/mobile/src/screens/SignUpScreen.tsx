@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
-import { authApi, demoSession } from '../api';
+import { authApi } from '../api';
 import { useApp } from '../context/AppContext';
 import Icon from '../components/Icon';
 import { haptic, useToast } from '../components/Toast';
@@ -21,27 +21,27 @@ export default function SignUpScreen() {
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const canSubmit = name.trim().length >= 2 && phone.trim().length >= 9;
+  const canSubmit =
+    name.trim().length >= 2 && phone.trim().length >= 9 && password.length >= 6 && password === confirm;
 
   const submit = async () => {
     if (!canSubmit || busy) return;
     setBusy(true);
     setError('');
     try {
-      const session = await authApi.signup(name.trim(), phone.trim());
+      const session = await authApi.signup(name.trim(), phone.trim(), password);
       signIn(session.token, session.user);
       haptic('success');
       show(t('auth.signedIn'), 'success');
       nav.goBack();
     } catch (e) {
-      const session = demoSession(name.trim(), phone.trim());
-      signIn(session.token, session.user);
       haptic('warning');
-      show(t('auth.demoOffline', 'Offline demo: signed in without a server account'), 'info');
-      nav.goBack();
+      setError(e instanceof Error ? e.message : t('auth.signUpFailed', 'Could not create account'));
     } finally {
       setBusy(false);
     }
@@ -93,6 +93,39 @@ export default function SignUpScreen() {
               />
             </View>
 
+            <Text style={styles.fieldLabel}>{t('auth.password', 'Password')}</Text>
+            <View style={styles.inputWrap}>
+              <Icon name="lock-outline" size={18} color={colors.faint} />
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                placeholder="••••••"
+                placeholderTextColor={colors.faint}
+                style={styles.input}
+              />
+            </View>
+
+            <Text style={styles.fieldLabel}>{t('auth.confirmPassword', 'Confirm password')}</Text>
+            <View style={styles.inputWrap}>
+              <Icon name="lock-check-outline" size={18} color={colors.faint} />
+              <TextInput
+                value={confirm}
+                onChangeText={setConfirm}
+                secureTextEntry
+                placeholder="••••••"
+                placeholderTextColor={colors.faint}
+                style={styles.input}
+              />
+            </View>
+
+            {password.length > 0 && password.length < 6 ? (
+              <Text style={styles.hint}>{t('auth.passwordHint', 'Password must be at least 6 characters')}</Text>
+            ) : null}
+            {confirm.length > 0 && password !== confirm ? (
+              <Text style={styles.hint}>{t('auth.passwordsDontMatch', 'Passwords do not match')}</Text>
+            ) : null}
+
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
             <Pressable onPress={submit} disabled={!canSubmit || busy} style={({ pressed }) => [styles.primaryBtn, (!canSubmit || pressed) && { opacity: 0.55 }]}>
@@ -133,6 +166,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   input: { flex: 1, paddingVertical: 13, fontSize: fontSizes.md, color: colors.ink },
+  hint: { fontSize: fontSizes.xs, color: colors.warn, fontWeight: '700' },
   error: { color: colors.danger, fontSize: fontSizes.sm, textAlign: 'center' },
   primaryBtn: { backgroundColor: colors.accent, borderRadius: radii.m, paddingVertical: 15, alignItems: 'center' },
   primaryText: { color: colors.white, fontWeight: '800', fontSize: fontSizes.md },

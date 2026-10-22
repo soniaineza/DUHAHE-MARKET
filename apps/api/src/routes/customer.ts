@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { PaymentMethod } from '@duhahe/shared';
 import { calculateOrder, createOrderFromInput, listOrders } from '../services/orderService';
 import { initiatePayment } from '../services/paymentService';
-import { signCustomerToken, verifyCustomerToken } from '../services/authService';
+import { signCustomerToken, verifyCustomerToken, hashPassword, verifyPassword } from '../services/authService';
 import {
   addAddress,
   consumeOtp,
@@ -27,17 +27,27 @@ function normalizePhone(value: unknown): string {
   return String(value ?? '').replace(/\D/g, '');
 }
 
+/** Strip the password hash before any user object leaves the API. */
+function publicUser(user: { id: string; name: string; phone: string; role: 'customer'; createdAt: string }) {
+  return { id: user.id, name: user.name, phone: user.phone, role: user.role, createdAt: user.createdAt };
+}
+
 export const customerRouter = Router();
 
 customerRouter.post('/auth/signup', (req, res) => {
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
   const phone = normalizePhone(req.body?.phone);
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
   if (!name) {
     res.status(400).json({ error: 'Name is required' });
     return;
   }
   if (phone.length < 9) {
     res.status(400).json({ error: 'A valid phone number is required' });
+    return;
+  }
+  if (password.length < 6) {
+    res.status(400).json({ error: 'Password must be at least 6 characters' });
     return;
   }
   const existing = getUserByPhone(phone);
@@ -47,9 +57,26 @@ customerRouter.post('/auth/signup', (req, res) => {
     phone,
     role: 'customer',
     createdAt: existing?.createdAt ?? new Date().toISOString(),
+    passwordHash: hashPassword(password),
   });
   const token = signCustomerToken(user);
-  res.status(201).json({ data: { token, user } });
+  res.status(201).json({ data: { token, user: publicUser(user) } });
+});
+
+customerRouter.post('/auth/login', (req, res) => {
+  const phone = normalizePhone(req.body?.phone);
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  if (phone.length < 9 || !password) {
+    res.status(400).json({ error: 'Phone and password are required' });
+    return;
+  }
+  const user = getUserByPhone(phone);
+  if (!user || !verifyPassword(password, user.passwordHash)) {
+    res.status(401).json({ error: 'Invalid phone number or password' });
+    return;
+  }
+  const token = signCustomerToken(user);
+  res.json({ data: { token, user: publicUser(user) } });
 });
 
 customerRouter.post('/auth/request-otp', (req, res) => {
@@ -81,7 +108,7 @@ customerRouter.post('/auth/verify', (req, res) => {
     }
   );
   const token = signCustomerToken(user);
-  res.json({ data: { token, user } });
+  res.json({ data: { token, user: publicUser(user) } });
 });
 
 customerRouter.get('/auth/me', (req, res) => {
@@ -97,7 +124,7 @@ customerRouter.get('/auth/me', (req, res) => {
     res.status(401).json({ error: 'Account not found' });
     return;
   }
-  res.json({ data: { user } });
+  res.json({ data: { user: publicUser(user) } });
 });
 
 customerRouter.get('/notifications', (req, res) => {

@@ -100,11 +100,6 @@ export default function AboutScreen() {
           </View>
         </View>
 
-        <View style={styles.demoNote}>
-          <Icon name="information-outline" size={17} color={colors.accentDark} />
-          <Text style={styles.demoNoteText}>{t('about.demoNote')}</Text>
-        </View>
-
         <Pressable
           onPress={() => { haptic('light'); nav.goBack(); }}
           style={({ pressed }) => [styles.doneBtn, pressed && { opacity: 0.85 }]}
@@ -141,8 +136,6 @@ const styles = StyleSheet.create({
   factText: { flex: 1, fontSize: fontSizes.sm, color: colors.inkSoft, fontWeight: '600', lineHeight: 19 },
   contactLabel: { fontSize: fontSizes.xs, color: colors.faint, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.3 },
   contactValue: { fontSize: fontSizes.sm, color: colors.ink, fontWeight: '700', marginTop: 1 },
-  demoNote: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.accentSoft, borderRadius: radii.s, padding: 12 },
-  demoNoteText: { flex: 1, fontSize: fontSizes.xs, color: colors.accentDark, fontWeight: '700', lineHeight: 17 },
   doneBtn: { backgroundColor: colors.accent, borderRadius: radii.m, paddingVertical: 15, alignItems: 'center' },
   doneBtnText: { color: '#fff', fontWeight: '800', fontSize: fontSizes.md },
 });

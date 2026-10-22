@@ -17,6 +17,8 @@ export interface CustomerUser {
   phone: string;
   role: 'customer';
   createdAt: string;
+  /** scrypt hash for password login (salt:hash). Never sent to clients. */
+  passwordHash?: string;
 }
 
 export interface AppNotification {

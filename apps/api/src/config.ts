@@ -11,12 +11,29 @@ function cleanEnvValue(value: string | undefined): string {
   return (value ?? '').trim().replace(/^["']+|["']+$/g, '');
 }
 
+/** Origins that must always work, regardless of what the host's CORS_ORIGINS says. */
+const DEFAULT_CORS_ORIGINS = [
+  'http://localhost:5173',
+  'https://duhaherwandamarket.store',
+  'https://www.duhaherwandamarket.store',
+  'https://admin.duhaherwandamarket.store',
+  'https://duhahe-admin.vercel.app',
+];
+
+function parseCorsOrigins(): string[] {
+  const fromEnv = (process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return Array.from(new Set([...DEFAULT_CORS_ORIGINS, ...fromEnv]));
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 4000),
   host: process.env.HOST ?? '0.0.0.0',
   nodeEnv: process.env.NODE_ENV ?? 'development',
   isProduction: (process.env.NODE_ENV ?? '').toLowerCase() === 'production',
-  corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:5173').split(',').map((s) => s.trim()),
+  corsOrigins: parseCorsOrigins(),
   jwtSecret: process.env.JWT_SECRET ?? 'dev-secret-change-me',
   /**
    * DEMO_MODE=false (default, owner/production config):

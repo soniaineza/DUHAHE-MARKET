@@ -13,7 +13,7 @@ import CategoriesScreen from '../screens/CategoriesScreen';
 import CartScreen from '../screens/CartScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
 import CheckoutSuccessScreen from '../screens/CheckoutSuccessScreen';
-import DemoPaymentScreen from '../screens/DemoPaymentScreen';
+import PaymentScreen from '../screens/PaymentScreen';
 import AboutScreen from '../screens/AboutScreen';
 import OrderTrackingScreen from '../screens/OrderTrackingScreen';
 import OrdersScreen from '../screens/OrdersScreen';
@@ -45,7 +45,7 @@ export type RootStackParamList = {
   Search: { q?: string } | undefined;
   Checkout: undefined;
   CheckoutSuccess: { orderNumber: string; total: number };
-  DemoPayment: { order: Order };
+  Payment: { order: Order };
   About: undefined;
   Tracking: { orderNumber: string; phone?: string };
   Notifications: undefined;
@@ -249,8 +249,8 @@ export default function RootNavigator() {
       />
 
       <Stack.Screen
-        name="DemoPayment"
-        component={DemoPaymentScreen}
+        name="Payment"
+        component={PaymentScreen}
         options={{ animation: 'fade' }}
       />
 

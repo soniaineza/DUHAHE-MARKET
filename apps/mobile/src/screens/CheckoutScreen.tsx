@@ -105,7 +105,7 @@ export default function CheckoutScreen() {
       if (method === 'cash_on_delivery') {
         nav.navigate('CheckoutSuccess', { orderNumber: order.orderNumber, total: order.total });
       } else {
-        nav.navigate('DemoPayment', { order });
+        nav.navigate('Payment', { order });
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Order failed');
@@ -223,9 +223,9 @@ export default function CheckoutScreen() {
               })}
             </View>
             {method !== 'cash_on_delivery' && (
-              <View style={styles.demoNote}>
+              <View style={styles.payNoteBox}>
                 <Icon name="information" size={15} color={colors.accentDeep} />
-                <Text style={styles.demoNoteText}>{t('payment.thisIsDemo')}</Text>
+                <Text style={styles.payNoteText}>{t('payment.paymentNote')}</Text>
               </View>
             )}
           </Section>
@@ -350,8 +350,8 @@ const styles = StyleSheet.create({
   radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.faint, alignItems: 'center', justifyContent: 'center' },
   radioActive: { borderColor: colors.accent },
   radioDot: { width: 11, height: 11, borderRadius: 6, backgroundColor: colors.accent },
-  demoNote: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: colors.accentSoft, borderRadius: radii.s, padding: 10 },
-  demoNoteText: { fontSize: fontSizes.xs, color: colors.accentDark, flex: 1 },
+  payNoteBox: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: colors.accentSoft, borderRadius: radii.s, padding: 10 },
+  payNoteText: { fontSize: fontSizes.xs, color: colors.accentDark, fontWeight: '700', flex: 1 },
   summary: { gap: 8 },
   sumRow: { flexDirection: 'row', justifyContent: 'space-between' },
   sumLabel: { fontSize: fontSizes.sm, color: colors.faint },

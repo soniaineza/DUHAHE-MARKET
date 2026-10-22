@@ -10,6 +10,27 @@ function safeEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(ha, hb);
 }
 
+/** Hash a customer password with scrypt. Format: `<saltHex>:<hashHex>`. */
+export function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16);
+  const hash = crypto.scryptSync(password, salt, 64);
+  return `${salt.toString('hex')}:${hash.toString('hex')}`;
+}
+
+/** Verify a password against a stored `salt:hash` value in constant time. */
+export function verifyPassword(password: string, stored: string | undefined): boolean {
+  if (!stored) return false;
+  const [saltHex, hashHex] = stored.split(':');
+  if (!saltHex || !hashHex) return false;
+  try {
+    const expected = Buffer.from(hashHex, 'hex');
+    const actual = crypto.scryptSync(password, Buffer.from(saltHex, 'hex'), expected.length);
+    return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+  } catch {
+    return false;
+  }
+}
+
 export interface AdminTokenPayload {
   sub: string;
   email: string;

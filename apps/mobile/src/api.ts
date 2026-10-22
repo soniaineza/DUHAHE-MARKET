@@ -107,8 +107,12 @@ export const api = {
 
   recentOrders: (phone: string) => get<Order[]>(`/orders/${encodeURIComponent(phone)}/recent`),
 
-  stubPayment: (payload: { method: 'mtn_momo' | 'airtel_money'; orderId: string; phone: string; amount: number }) =>
-    post<PaymentResult>('/payments/stub', payload),
+  createPayment: (payload: {
+    method: 'mtn_momo' | 'airtel_money' | 'cash_on_delivery';
+    orderId: string;
+    phone: string;
+    amount: number;
+  }) => post<PaymentResult>('/payments/create', payload),
 };
 
 export interface AuthUser {
@@ -123,16 +127,8 @@ export interface AuthSession {
   user: AuthUser;
 }
 
-export function demoSession(name: string, phone: string): AuthSession {
-  return {
-    token: `demo-${phone}`,
-    user: { id: `demo-${phone}`, name, phone, createdAt: new Date().toISOString() },
-  };
-}
-
 export interface OtpResult {
   phone: string;
-  demoCode: string;
   registered: boolean;
 }
 
@@ -147,7 +143,9 @@ export interface AppNotification {
 }
 
 export const authApi = {
-  signup: (name: string, phone: string) => post<AuthSession>('/auth/signup', { name, phone }),
+  signup: (name: string, phone: string, password: string) =>
+    post<AuthSession>('/auth/signup', { name, phone, password }),
+  login: (phone: string, password: string) => post<AuthSession>('/auth/login', { phone, password }),
   requestOtp: (phone: string) => post<OtpResult>('/auth/request-otp', { phone }),
   verifyOtp: (phone: string, code: string) => post<AuthSession>('/auth/verify', { phone, code }),
   me: (token: string) => authGet<{ user: AuthUser }>('/auth/me', token),

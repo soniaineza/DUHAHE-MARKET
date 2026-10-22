@@ -14,21 +14,23 @@ import { haptic } from '../components/Toast';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors, fontSizes, radii, shadow } from '../theme';
 
-interface Props {
-  route: RouteProp<RootStackParamList, 'DemoPayment'>;
-}
-
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-type Phase = 'sending' | 'waiting' | 'success' | 'success_cash' | 'error';
+type Phase = 'sending' | 'waiting' | 'success' | 'error';
+
+export interface PaymentResult {
+  success: boolean;
+  providerRequestId?: string;
+  message?: { en: string; fr: string; kin: string };
+}
 
 const paymentMeta: Record<PaymentMethod, { icon: IconName; tile: readonly [string, string]; note: string }> = {
-  mtn_momo: { icon: 'cellphone', tile: ['#ffcb05', '#f5b800'], note: 'MTN' },
-  airtel_money: { icon: 'cellphone', tile: ['#f43f5e', '#e11d48'], note: 'Airtel' },
-  cash_on_delivery: { icon: 'hand-coin', tile: ['#334155', '#475569'], note: 'Cash' },
+  mtn_momo: { icon: 'cellphone', tile: ['#ffcb05', '#f5b800'], note: 'MTN Mobile Money' },
+  airtel_money: { icon: 'cellphone', tile: ['#f43f5e', '#e11d48'], note: 'Airtel Money' },
+  cash_on_delivery: { icon: 'hand-coin', tile: ['#334155', '#475569'], note: 'Cash on Delivery' },
 };
 
-export default function DemoPaymentScreen({ route }: Props) {
+export default function PaymentScreen({ route }: { route: RouteProp<RootStackParamList, 'Payment'> }) {
   const { t } = useTranslation();
   const nav = useNavigation<Nav>();
   const { order } = route.params;
@@ -36,7 +38,7 @@ export default function DemoPaymentScreen({ route }: Props) {
   const meta = paymentMeta[order.paymentMethod];
   const [phase, setPhase] = useState<Phase>('sending');
   const [reference, setReference] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const pulse = useRef(new Animated.Value(1)).current;
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -45,14 +47,14 @@ export default function DemoPaymentScreen({ route }: Props) {
     timers.current.push(setTimeout(fn, ms));
   };
 
-  const runPayment = async () => {
+  const processPayment = async () => {
     if (busy) return;
     setBusy(true);
-    setError('');
+    setError(null);
     setPhase('sending');
     try {
-      const result = await api.stubPayment({
-        method: order.paymentMethod === 'cash_on_delivery' ? 'mtn_momo' : order.paymentMethod,
+      const result = await api.createPayment({
+        method: order.paymentMethod,
         orderId: order.id,
         phone: order.customer.phone,
         amount: order.total,
@@ -62,12 +64,12 @@ export default function DemoPaymentScreen({ route }: Props) {
         setPhase('success');
         haptic('success');
       } else {
-        setError(result.message.en);
+        setError(result.message?.en ?? 'Payment failed');
         setPhase('error');
         haptic('error');
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : t('payment.failed'));
+      setError(e instanceof Error ? e.message : 'Payment failed');
       setPhase('error');
       haptic('error');
     } finally {
@@ -77,14 +79,13 @@ export default function DemoPaymentScreen({ route }: Props) {
 
   useEffect(() => {
     if (order.paymentMethod === 'cash_on_delivery') {
-      setPhase('success_cash');
+      setPhase('success');
       haptic('success');
       return;
     }
     later(() => setPhase('waiting'), 1100);
-    later(() => runPayment(), 2300);
+    later(() => processPayment(), 2300);
     return () => timers.current.forEach(clearTimeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -118,7 +119,7 @@ export default function DemoPaymentScreen({ route }: Props) {
             </LinearGradient>
             <View style={{ flex: 1 }}>
               <Text style={styles.providerName}>{t(`checkout.${order.paymentMethod}`)}</Text>
-              <Text style={styles.providerNote}>{meta.note} · {t('payment.demoTitle')}</Text>
+              <Text style={styles.providerNote}>{meta.note}</Text>
             </View>
           </View>
 
@@ -134,15 +135,15 @@ export default function DemoPaymentScreen({ route }: Props) {
             </View>
           )}
 
-          {(phase === 'success' || phase === 'success_cash') && (
+          {(phase === 'success') && (
             <View style={styles.result}>
               <Animated.View style={[styles.checkCircle, { transform: [{ scale: pulse }] }]}>
                 <LinearGradient colors={['#111111', '#000000']} style={styles.checkInner}>
                   <Icon name="check-bold" size={30} color="#fff" />
                 </LinearGradient>
               </Animated.View>
-              <Text style={styles.resultTitle}>{phase === 'success' ? t('payment.approved') : t('payment.cashApproved')}</Text>
-              <Text style={styles.resultSub}>{phase === 'success' ? t('payment.approvedSub') : t('payment.cashSub')}</Text>
+              <Text style={styles.resultTitle}>{t('payment.approved')}</Text>
+              <Text style={styles.resultSub}>{t('payment.approvedSub')}</Text>
               {reference ? (
                 <View style={styles.refRow}>
                   <Text style={styles.refLabel}>{t('payment.reference')}</Text>
@@ -162,26 +163,6 @@ export default function DemoPaymentScreen({ route }: Props) {
             </View>
           )}
         </View>
-
-        <Pressable
-          onPress={phase === 'error' ? runPayment : done}
-          disabled={processing}
-          style={({ pressed }) => [styles.primaryBtn, processing && styles.primaryBtnDim, pressed && { opacity: 0.85 }]}
-        >
-          {processing ? (
-            <ActivityIndicator color="#fff" />
-          ) : phase === 'error' ? (
-            <>
-              <Icon name="refresh" size={18} color="#fff" />
-              <Text style={styles.primaryText}>{t('payment.retry')}</Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.primaryText}>{t('payment.done')}</Text>
-              <Icon name="arrow-right" size={18} color="#fff" />
-            </>
-          )}
-        </Pressable>
       </View>
     </SafeAreaView>
   );

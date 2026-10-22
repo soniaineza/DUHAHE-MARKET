@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
-import { authApi, demoSession } from '../api';
+import { authApi } from '../api';
 import { useApp } from '../context/AppContext';
 import Icon from '../components/Icon';
 import { haptic, useToast } from '../components/Toast';
@@ -20,53 +20,26 @@ export default function SignInScreen() {
   const { show } = useToast();
 
   const [phone, setPhone] = useState('');
-  const [code, setCode] = useState('');
-  const [demoCode, setDemoCode] = useState('');
-  const [stage, setStage] = useState<'phone' | 'otp'>('phone');
+  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const phoneValid = phone.trim().length >= 9;
+  const canSubmit = phoneValid && password.length >= 6;
 
-  const sendCode = async () => {
-    if (!phoneValid || busy) return;
+  const submit = async () => {
+    if (!canSubmit || busy) return;
     setBusy(true);
     setError('');
     try {
-      const res = await authApi.requestOtp(phone.trim());
-      setDemoCode(res.demoCode);
-      setStage('otp');
-      setError('');
-      haptic('success');
-    } catch (e) {
-      setDemoCode('123456');
-      setStage('otp');
-      setError('Demo mode: use code 123456');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const verify = async () => {
-    if (code.trim().length < 4 || busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      const session = await authApi.verifyOtp(phone.trim(), code.trim());
+      const session = await authApi.login(phone.trim(), password);
       signIn(session.token, session.user);
       haptic('success');
       show(t('auth.signedIn'), 'success');
       nav.goBack();
     } catch (e) {
-      if (code.trim() === '123456') {
-        const session = demoSession('Duhahe Customer', phone.trim());
-        signIn(session.token, session.user);
-        haptic('warning');
-        show(t('auth.demoOffline', 'Offline demo: signed in without a server account'), 'info');
-        nav.goBack();
-      } else {
-        setError(e instanceof Error ? e.message : t('auth.invalidCode'));
-      }
+      haptic('warning');
+      setError(e instanceof Error ? e.message : t('auth.invalidCredentials', 'Invalid phone number or password'));
     } finally {
       setBusy(false);
     }
@@ -100,51 +73,33 @@ export default function SignInScreen() {
                 value={phone}
                 onChangeText={setPhone}
                 keyboardType="phone-pad"
-                editable={stage === 'phone'}
+                editable={!busy}
                 placeholder="0788123456"
                 placeholderTextColor={colors.faint}
                 style={styles.input}
               />
             </View>
 
-            {stage === 'otp' && (
-              <>
-                <Text style={styles.fieldLabel}>{t('auth.otp')}</Text>
-                <View style={styles.inputWrap}>
-                  <Icon name="shield-key-outline" size={18} color={colors.faint} />
-                  <TextInput
-                    value={code}
-                    onChangeText={setCode}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    placeholder="• • • • • •"
-                    placeholderTextColor={colors.faint}
-                    style={styles.input}
-                  />
-                </View>
-                <View style={styles.demoNote}>
-                  <Icon name="information" size={15} color={colors.accentDeep} />
-                  <Text style={styles.demoNoteText}>{t('auth.demoCode', { code: demoCode })}</Text>
-                </View>
-              </>
-            )}
+            <Text style={styles.fieldLabel}>{t('auth.password', 'Password')}</Text>
+            <View style={styles.inputWrap}>
+              <Icon name="lock-outline" size={18} color={colors.faint} />
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                editable={!busy}
+                placeholder="••••••"
+                placeholderTextColor={colors.faint}
+                style={styles.input}
+                onSubmitEditing={submit}
+              />
+            </View>
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
-            {stage === 'phone' ? (
-              <Pressable onPress={sendCode} disabled={!phoneValid || busy} style={({ pressed }) => [styles.primaryBtn, (!phoneValid || pressed) && { opacity: 0.55 }]}>
-                {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{t('auth.sendOtp')}</Text>}
-              </Pressable>
-            ) : (
-              <>
-                <Pressable onPress={verify} disabled={busy} style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.85 }]}>
-                  {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{t('auth.verify')}</Text>}
-                </Pressable>
-                <Pressable onPress={sendCode} disabled={busy} style={styles.resend}>
-                  <Text style={styles.resendText}>{t('auth.sendOtp')}</Text>
-                </Pressable>
-              </>
-            )}
+            <Pressable onPress={submit} disabled={!canSubmit || busy} style={({ pressed }) => [styles.primaryBtn, (!canSubmit || pressed) && { opacity: 0.55 }]}>
+              {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{t('auth.signIn')}</Text>}
+            </Pressable>
           </View>
 
           <Pressable onPress={() => nav.navigate('SignUp')} style={({ pressed }) => [styles.createRow, pressed && { opacity: 0.8 }]}>
@@ -180,13 +135,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   input: { flex: 1, paddingVertical: 13, fontSize: fontSizes.md, color: colors.ink },
-  demoNote: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.accentSoft, borderRadius: radii.s, padding: 10 },
-  demoNoteText: { fontSize: fontSizes.xs, color: colors.accentDark, flex: 1, fontWeight: '700' },
   error: { color: colors.danger, fontSize: fontSizes.sm, textAlign: 'center' },
   primaryBtn: { backgroundColor: colors.accent, borderRadius: radii.m, paddingVertical: 15, alignItems: 'center' },
   primaryText: { color: colors.white, fontWeight: '800', fontSize: fontSizes.md },
-  resend: { alignItems: 'center', paddingVertical: 6 },
-  resendText: { color: colors.accentDeep, fontWeight: '700', fontSize: fontSizes.sm },
   createRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, paddingVertical: 6 },
   createText: { color: colors.muted, fontSize: fontSizes.sm },
   createLink: { color: colors.accentDeep, fontSize: fontSizes.sm, fontWeight: '800' },

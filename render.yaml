@@ -18,7 +18,7 @@ services:
       - key: MONGO_DATABASE
         value: duhahe_market_prod
       - key: CORS_ORIGINS
-        value: https://duhahe-admin.vercel.app
+        value: https://duhahe-admin.vercel.app,https://duhaherwandamarket.store,https://www.duhaherwandamarket.store,https://admin.duhaherwandamarket.store
       - key: ADMIN_EMAIL
         value: admin@duhahe.rw
       - key: ADMIN_PASSWORD
