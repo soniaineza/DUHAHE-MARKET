@@ -165,6 +165,7 @@ export const translations: Record<
       retry: 'Retry',
       done: 'Done',
       notConfirmed: 'We did not receive confirmation yet. Check your orders.',
+      paymentNote: 'After placing your order, approve the payment prompt on your phone to complete it.',
       failed: 'Payment could not be completed.',
     },
     about: {
@@ -471,6 +472,7 @@ export const translations: Record<
       retry: 'Ongera ugerageze',
       done: 'Rangiza',
       notConfirmed: 'Ntitwabonye kwemeza. Reba ibyo wagura.',
+      paymentNote: 'Nyuma yo gutanga ibyo wagura, emeza ubutumwa bwo kwishyura kuri telefone yawe.',
       failed: 'Kwishyura ntibyakunze kurangizwa.',
     },
     about: {
@@ -777,6 +779,7 @@ export const translations: Record<
       retry: 'Réessayer',
       done: 'Terminer',
       notConfirmed: 'Nous n’avons pas encore reçu de confirmation. Consultez vos commandes.',
+      paymentNote: 'Après avoir passé la commande, approuvez la demande de paiement sur votre téléphone pour la finaliser.',
       failed: 'Le paiement n’a pas pu être effectué.',
     },
     about: {
