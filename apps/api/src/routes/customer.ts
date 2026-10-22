@@ -86,9 +86,11 @@ customerRouter.post('/auth/request-otp', (req, res) => {
     res.status(400).json({ error: 'A valid phone number is required' });
     return;
   }
-  const demoCode = String(Math.floor(100000 + Math.random() * 900000));
-  setOtp(phone, demoCode);
-  res.json({ data: { phone, demoCode, registered: !!getUserByPhone(phone) } });
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  setOtp(phone, code);
+  // No SMS gateway is configured, so the code is not returned to the client.
+  // Customers sign in with their password; this endpoint stays for future SMS delivery.
+  res.json({ data: { phone, registered: !!getUserByPhone(phone) } });
 });
 
 customerRouter.post('/auth/verify', (req, res) => {
@@ -276,6 +278,15 @@ customerRouter.post('/orders', (req, res) => {
     return;
   }
   res.status(201).json({ data: result.order });
+});
+
+customerRouter.get('/orders/by-id/:id', (req, res) => {
+  const order = listOrders().find((o) => o.id === req.params.id);
+  if (!order) {
+    res.status(404).json({ error: 'Order not found' });
+    return;
+  }
+  res.json({ data: order });
 });
 
 customerRouter.get('/orders/:phone/recent', (req, res) => {

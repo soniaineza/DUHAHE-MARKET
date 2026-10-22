@@ -1,5 +1,4 @@
-import type { PaymentMethod, PaymentRequest, PaymentResult } from '@duhahe/shared';
-import { config } from '../config';
+import type { PaymentRequest, PaymentResult } from '@duhahe/shared';
 import { orders, pushNotification, updateOrderPaymentStatus } from '../data/store';
 import { paypackReady, requestCashin } from './paypackService';
 
@@ -33,21 +32,12 @@ function failure(message: PaymentResult['message'], status: PaymentResult['statu
   return { success: false, message, status };
 }
 
-function stubRequest(method: PaymentMethod, phone: string, amount: number): PaymentResult {
-  // Demo gateway: a valid Rwandan-style phone number always approves, so the
-  // whole checkout flow works end-to-end without moving real money.
-  const digits = phone.replace(/\D/g, '');
-  const success = digits.length >= 9;
-  return {
-    success,
-    providerRequestId: `dm-${crypto.randomUUID().slice(0, 12)}`,
-    message: {
-      en: success ? `Demo payment of ${amount} RWF approved. No real money was moved.` : 'Invalid phone number for payment.',
-      kin: success ? `Kwishyura kwa demo kwa ${amount} RWF kwemejwe. Nta mafaranga nyayo byakoresheje.` : 'Nomero itari iy’ikoreshwa mu kwishyura.',
-      fr: success ? `Paiement de démonstration de ${amount} RWF approuvé. Aucun argent réel n’a été déplacé.` : 'Numéro invalide pour le paiement.',
-    },
-    status: success ? 'paid' : 'failed',
-  };
+function gatewayUnavailable(): PaymentResult {
+  return failure({
+    en: 'Mobile Money is not available right now. Please choose cash on delivery or try again later.',
+    kin: 'Kwishyura na Mobile Money ntibiboneka ubu. Hitamo kwishyura mu gihe cyo gutanga cyangwa ugerageze nyuma.',
+    fr: 'Le paiement Mobile Money est indisponible pour le moment. Choisissez le paiement à la livraison ou réessayez plus tard.',
+  });
 }
 
 export async function initiatePayment(req: PaymentRequest): Promise<PaymentResult> {
@@ -109,12 +99,8 @@ export async function initiatePayment(req: PaymentRequest): Promise<PaymentResul
   let result: PaymentResult;
   if (paypackReady() && (req.method === 'mtn_momo' || req.method === 'airtel_money')) {
     result = await paypackCashin(order.id, expected); // real mobile-money money movement via Paypack
-  } else if (req.method === 'mtn_momo' && config.momo.enabled) {
-    result = await mtnMomoRequest(order.customer.phone, expected); // direct MTN collection (Phase 2)
-  } else if (req.method === 'airtel_money' && config.airtel.enabled) {
-    result = await airtelRequest(order.customer.phone, expected); // Phase 2
   } else {
-    result = stubRequest(req.method, order.customer.phone, expected);
+    result = gatewayUnavailable();
   }
 
   if (result.status === 'failed') {
@@ -122,8 +108,8 @@ export async function initiatePayment(req: PaymentRequest): Promise<PaymentResul
     // the webhook (which re-verifies the amount against order.total).
     updateOrderPaymentStatus(order.id, 'failed', result.providerRequestId);
   } else if (result.status === 'paid') {
-    // Synchronous gateway (demo stub / Phase 2 direct APIs) approved the exact
-    // order total above, so the order is settled now.
+    // Synchronous gateway approval of the exact order total above, so the
+    // order is settled now.
     updateOrderPaymentStatus(order.id, 'paid', result.providerRequestId);
     pushNotification({
       phone: order.customer.phone,
@@ -165,12 +151,3 @@ async function paypackCashin(orderId: string, amount: number): Promise<PaymentRe
 
 /** Paypack cashin settles asynchronously: the transform to local phone format happens in paypackService. */
 
-async function mtnMomoRequest(phone: string, amount: number): Promise<PaymentResult> {
-  // Phase 2: POST to Collection API v1.0 requesttopay with Ocp-Apim-Subscription-Key
-  return stubRequest('mtn_momo', phone, amount);
-}
-
-async function airtelRequest(phone: string, amount: number): Promise<PaymentResult> {
-  // Phase 2: Airtel Money Rwanda REST API
-  return stubRequest('airtel_money', phone, amount);
-}

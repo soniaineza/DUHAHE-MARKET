@@ -107,6 +107,8 @@ export const api = {
 
   recentOrders: (phone: string) => get<Order[]>(`/orders/${encodeURIComponent(phone)}/recent`),
 
+  orderById: (id: string) => get<Order>(`/orders/by-id/${encodeURIComponent(id)}`),
+
   createPayment: (payload: {
     method: 'mtn_momo' | 'airtel_money' | 'cash_on_delivery';
     orderId: string;
