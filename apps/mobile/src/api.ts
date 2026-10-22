@@ -1,5 +1,5 @@
 import Constants from 'expo-constants';
-import type { CategoryId, Language, Order, PaymentResult, Product } from '@duhahe/shared';
+import type { CategoryId, Language, Order, PaymentResult, PaymentStatus, Product } from '@duhahe/shared';
 
 const API_PORT = 4000;
 const PRODUCTION_API_URL = 'https://duhahe-market-1.onrender.com/api';
@@ -115,6 +115,15 @@ export const api = {
     phone: string;
     amount: number;
   }) => post<PaymentResult>('/payments/create', payload),
+
+  paymentStatus: (orderId: string) =>
+    get<{
+      status: PaymentStatus;
+      providerStatus?: 'pending' | 'successful' | 'failed';
+      providerReference?: string;
+      amount?: number;
+      amountMismatch?: boolean;
+    }>(`/payments/status/${encodeURIComponent(orderId)}`),
 };
 
 export interface AuthUser {

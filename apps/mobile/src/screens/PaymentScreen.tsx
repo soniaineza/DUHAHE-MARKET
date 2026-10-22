@@ -18,8 +18,8 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 type Phase = 'sending' | 'waiting' | 'success' | 'error';
 
-const POLL_INTERVAL_MS = 3000;
-const POLL_TIMEOUT_MS = 150000;
+const POLL_INTERVAL_MS = 4000;
+const POLL_TIMEOUT_MS = 600000;
 
 const paymentMeta: Record<PaymentMethod, { icon: IconName; tile: readonly [string, string]; note: string }> = {
   mtn_momo: { icon: 'cellphone', tile: ['#ffcb05', '#f5b800'], note: 'MTN Mobile Money' },
@@ -68,12 +68,12 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
     stopPolling();
     poll.current = setInterval(async () => {
       try {
-        const latest = await api.orderById(order.id);
-        if (latest.paymentStatus === 'paid') {
-          setReference(latest.providerReference ?? reference);
+        const latest = await api.paymentStatus(order.id);
+        if (latest.providerReference) setReference(latest.providerReference);
+        if (latest.status === 'paid') {
           succeed();
-        } else if (latest.paymentStatus === 'failed') {
-          fail(t('payment.failed'));
+        } else if (latest.status === 'failed') {
+          fail(t('payment.cancelled', 'The payment was not completed. You can try again.'));
         } else if (Date.now() - startedAt.current > POLL_TIMEOUT_MS) {
           fail(t('payment.notConfirmed', 'We did not receive confirmation yet. Check your orders.'));
         }

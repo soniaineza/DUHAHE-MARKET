@@ -116,25 +116,66 @@ export type PaypackTransaction = {
   client: string;
 };
 
-/** Fallback poll used when a webhook is missed. */
+/** Providers report a handful of spellings; fold them onto our three states. */
+function normalizeStatus(raw: unknown): PaypackTransaction['status'] | null {
+  const status = String(raw ?? '').toLowerCase();
+  if (status === 'successful' || status === 'successfull' || status === 'success') return 'successful';
+  if (status === 'failed' || status === 'cancelled' || status === 'canceled' || status === 'rejected') return 'failed';
+  if (status === 'pending' || status === 'processing') return 'pending';
+  return null;
+}
+
+/**
+ * Look up the live transaction state.
+ *
+ * Uses `/transactions/find/{ref}` first (it can return `pending` as soon as the
+ * request is created), then falls back to the events feed for older sandbox
+ * transactions. Never throws: callers treat `null` as "still unknown".
+ */
 export async function getTransaction(ref: string): Promise<PaypackTransaction | null> {
+  if (!ref) return null;
   const token = await accessToken();
+
   try {
-    const data = await request('GET', '/events/transactions?ref=' + encodeURIComponent(ref), {}, token);
-    const rows = Array.isArray(data?.transactions) ? data.transactions : [];
-    const processed = rows.find((t: any) => t?.data?.status) ?? rows[rows.length - 1];
-    const d = processed?.data ?? {};
-    if (!d.status) return null;
-    return {
-      ref: String(d.ref ?? ref),
-      kind: d.kind,
-      status: d.status,
-      amount: Number(d.amount ?? 0),
-      client: String(d.client ?? ''),
-    };
-  } catch {
-    return null;
+    const data = await request('GET', `/transactions/find/${encodeURIComponent(ref)}`, {}, token);
+    const status = normalizeStatus(data?.status);
+    if (status) {
+      return {
+        ref: String(data.ref ?? ref),
+        kind: data.kind === 'CASHOUT' ? 'CASHOUT' : 'CASHIN',
+        status,
+        amount: Number(data.amount ?? 0),
+        client: String(data.client ?? ''),
+      };
+    }
+  } catch (err) {
+    if (err instanceof Error && /\b401\b|unauthor|token/i.test(err.message)) clearPaypackToken();
   }
+
+  // Fallback for transactions that only appear in the events feed.
+  try {
+    const data = await request('GET', `/events/transactions?ref=${encodeURIComponent(ref)}`, {}, token);
+    const rows = Array.isArray(data?.transactions) ? data.transactions : [];
+    // Newest event wins: a transaction may be created as `pending` and later
+    // processed as `successful` or `failed`.
+    for (let i = rows.length - 1; i >= 0; i -= 1) {
+      const d = rows[i]?.data ?? rows[i] ?? {};
+      const status = normalizeStatus(d.status);
+      if (status) {
+        return {
+          ref: String(d.ref ?? ref),
+          kind: d.kind === 'CASHOUT' ? 'CASHOUT' : 'CASHIN',
+          status,
+          amount: Number(d.amount ?? 0),
+          client: String(d.client ?? ''),
+        };
+      }
+    }
+  } catch (err) {
+    if (err instanceof Error && /\b401\b|unauthor|token/i.test(err.message)) clearPaypackToken();
+  }
+
+  return null;
 }
 
 /**

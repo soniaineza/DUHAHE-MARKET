@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import type { PaymentMethod } from '@duhahe/shared';
 import { calculateOrder, createOrderFromInput, listOrders } from '../services/orderService';
-import { initiatePayment } from '../services/paymentService';
+import { initiatePayment, syncOrderPayment } from '../services/paymentService';
 import { signCustomerToken, verifyCustomerToken, hashPassword, verifyPassword } from '../services/authService';
 import {
   addAddress,
@@ -320,3 +320,20 @@ const createPaymentHandler = async (req: Request, res: Response) => {
 
 customerRouter.post('/payments/create', createPaymentHandler);
 customerRouter.post('/payments/stub', createPaymentHandler);
+
+/**
+ * Live payment status for the waiting screen: reconciles the order with
+ * Paypack so approval, cancellation and expiry are all detected.
+ */
+customerRouter.get('/payments/status/:orderId', async (req, res) => {
+  try {
+    const result = await syncOrderPayment(req.params.orderId);
+    if (!result) {
+      res.status(404).json({ error: 'Order not found' });
+      return;
+    }
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Payment status check failed' });
+  }
+});

@@ -1,6 +1,6 @@
-import type { PaymentRequest, PaymentResult } from '@duhahe/shared';
+import type { Order, PaymentRequest, PaymentResult } from '@duhahe/shared';
 import { orders, pushNotification, updateOrderPaymentStatus } from '../data/store';
-import { paypackReady, requestCashin } from './paypackService';
+import { getTransaction, paypackReady, requestCashin } from './paypackService';
 
 /**
  * Payment gateway layer.
@@ -36,7 +36,23 @@ function gatewayUnavailable(): PaymentResult {
   return failure({
     en: 'Mobile Money is not available right now. Please choose cash on delivery or try again later.',
     kin: 'Kwishyura na Mobile Money ntibiboneka ubu. Hitamo kwishyura mu gihe cyo gutanga cyangwa ugerageze nyuma.',
-    fr: 'Le paiement Mobile Money est indisponible pour le moment. Choisissez le paiement à la livraison ou réessayez plus tard.',
+    fr: 'Le paiement Mobile Money est indisponible pour le moment. Choisissez le paiement A� la livraison ou rAcessayez plus tard.',
+  });
+}
+
+/** A provider amount only settles an order when it is present and exact. */
+function amountSettlesOrder(orderTotal: number, reported: unknown): boolean {
+  const value = Number(reported);
+  if (!Number.isFinite(value) || value <= 0) return false;
+  return roundMoney(value) === roundMoney(orderTotal);
+}
+
+function notifyPaid(order: Order): void {
+  pushNotification({
+    phone: order.customer.phone,
+    title: 'Payment received',
+    body: `Payment of ${order.total} RWF for order ${order.orderNumber} was received.`,
+    kind: 'order',
   });
 }
 
@@ -91,9 +107,51 @@ export async function initiatePayment(req: PaymentRequest): Promise<PaymentResul
     updateOrderPaymentStatus(order.id, 'unpaid');
     return {
       success: true,
-      message: { en: 'You will pay cash on delivery.', kin: 'Uzishyura iyo baraguhereje.', fr: 'Vous paierez à la livraison.' },
+      message: { en: 'You will pay cash on delivery.', kin: 'Uzishyura iyo baraguhereje.', fr: 'Vous paierez A� la livraison.' },
       status: 'unpaid',
     };
+  }
+
+  // Idempotency for mobile money: an existing request must be resolved before
+  // we ever send a second prompt. This is what prevents a customer who retries
+  // from being charged twice, and it also picks up a payment that was approved
+  // after the app stopped polling.
+  if (paypackReady() && order.providerReference) {
+    const existing = await getTransaction(order.providerReference);
+    if (existing?.status === 'successful') {
+      if (amountSettlesOrder(order.total, existing.amount)) {
+        updateOrderPaymentStatus(order.id, 'paid', order.providerReference);
+        notifyPaid(order);
+        return {
+          success: true,
+          providerRequestId: order.providerReference,
+          message: {
+            en: `Order ${order.orderNumber} has already been paid in full.`,
+            kin: `Igisubizo ${order.orderNumber} cyishyurwe ku buryo bwuzuye.`,
+            fr: `La commande ${order.orderNumber} a dAcjA� ActAc payAce intAcgralement.`,
+          },
+          status: 'paid',
+        };
+      }
+      return failure({
+        en: 'A payment was received for a different amount. Please contact support before paying again.',
+        kin: 'Amafaranga yishyuwe atandukanye n’igiteranyo cy’iyi sisitemu. Vugana n’ubufasha mbere yo kongera kwishyura.',
+        fr: 'Un paiement a été reçu pour un montant différent. Contactez le support avant de payer à nouveau.',
+      });
+    }
+    if (existing?.status === 'pending') {
+      return {
+        success: true,
+        providerRequestId: order.providerReference,
+        message: {
+          en: 'Your payment request is still waiting for approval on your phone.',
+          kin: 'Ubusabe bwo kwishyura bukitegereje kwemezwa kuri telefone yawe.',
+          fr: 'Votre demande de paiement attend toujours votre approbation sur votre téléphone.',
+        },
+        status: 'unpaid',
+      };
+    }
+    // `failed` (or unknown because the request expired) — a fresh prompt is allowed.
   }
 
   let result: PaymentResult;
@@ -111,14 +169,68 @@ export async function initiatePayment(req: PaymentRequest): Promise<PaymentResul
     // Synchronous gateway approval of the exact order total above, so the
     // order is settled now.
     updateOrderPaymentStatus(order.id, 'paid', result.providerRequestId);
-    pushNotification({
-      phone: order.customer.phone,
-      title: 'Payment received',
-      body: `Payment of ${order.total} RWF for order ${order.orderNumber} was received.`,
-      kind: 'order',
-    });
+    notifyPaid(order);
   }
   return result;
+}
+
+export interface PaymentSyncResult {
+  status: Order['paymentStatus'];
+  providerStatus?: 'pending' | 'successful' | 'failed';
+  providerReference?: string;
+  amount?: number;
+  amountMismatch?: boolean;
+}
+
+/**
+ * Actively reconcile one order with Paypack. The mobile app calls this while
+ * waiting on the phone prompt, so approval AND cancellation are both detected
+ * even when the webhook is delayed or not configured.
+ *
+ * Money is only ever counted when Paypack reports `successful` AND the amount
+ * equals the server-computed order total.
+ */
+export async function syncOrderPayment(orderId: string): Promise<PaymentSyncResult | null> {
+  const order = orders.find((o) => o.id === orderId);
+  if (!order) return null;
+
+  const ref = order.providerReference;
+  if (!ref || !paypackReady() || order.paymentStatus === 'paid' || order.paymentStatus === 'refunded') {
+    return { status: order.paymentStatus, providerReference: ref };
+  }
+
+  const tx = await getTransaction(ref);
+  if (!tx) return { status: order.paymentStatus, providerReference: ref };
+
+  if (tx.status === 'successful') {
+    if (!amountSettlesOrder(order.total, tx.amount)) {
+      console.warn(
+        `[paypack] AMOUNT MISMATCH on sync ref=${ref} order=${order.orderNumber}: ` +
+          `received ${tx.amount} RWF but the order total is ${order.total} RWF - not marking paid.`,
+      );
+      return {
+        status: order.paymentStatus,
+        providerStatus: tx.status,
+        providerReference: ref,
+        amount: tx.amount,
+        amountMismatch: true,
+      };
+    }
+    updateOrderPaymentStatus(order.id, 'paid', ref);
+    notifyPaid(order);
+    return { status: 'paid', providerStatus: tx.status, providerReference: ref, amount: tx.amount };
+  }
+
+  if (tx.status === 'failed') {
+    updateOrderPaymentStatus(order.id, 'failed', ref);
+  }
+
+  return {
+    status: order.paymentStatus,
+    providerStatus: tx.status,
+    providerReference: ref,
+    amount: tx.amount,
+  };
 }
 
 async function paypackCashin(orderId: string, amount: number): Promise<PaymentResult> {
