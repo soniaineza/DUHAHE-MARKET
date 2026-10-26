@@ -7,7 +7,7 @@ import { useAdminI18n } from '../i18n';
 export default function Login() {
   const { lang, setLang, t } = useAdminI18n();
   const [email, setEmail] = useState('admin@duhahe.rw');
-  const [password, setPassword] = useState('admin123');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [productCount, setProductCount] = useState<number | null>(null);
@@ -133,7 +133,7 @@ export default function Login() {
           </div>
 
           <div className="mt-4 rounded-xl bg-leaf-50 border border-leaf-100 px-4 py-3 text-xs text-ink leading-relaxed">
-            <span className="font-bold">{t('demo')}:</span> {t('credentials')} {t('changeCredentials')}
+            {t('envNote')}
           </div>
         </div>
       </div>

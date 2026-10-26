@@ -50,9 +50,9 @@ export const config = {
     database: process.env.MONGO_DATABASE ?? 'duhahe_market',
   },
   admin: {
-    email: process.env.ADMIN_EMAIL ?? 'admin@duhahe.rw',
-    password: process.env.ADMIN_PASSWORD ?? 'admin123',
-    name: process.env.ADMIN_NAME ?? 'Esperance Mukabaranga',
+    email: cleanEnvValue(process.env.ADMIN_EMAIL) || 'admin@duhahe.rw',
+    password: cleanEnvValue(process.env.ADMIN_PASSWORD) || 'admin123',
+    name: cleanEnvValue(process.env.ADMIN_NAME) || 'Esperance Mukabaranga',
   },
   momo: {
     enabled: process.env.MTN_MOMO_ENABLED === 'true',

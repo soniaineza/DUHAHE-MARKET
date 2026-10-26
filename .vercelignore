@@ -1,0 +1,10 @@
+node_modules
+**/node_modules
+.git
+.expo
+**/dist
+apps/mobile
+apps/api
+*.log
+.archymedes
+.backup-demo-data
