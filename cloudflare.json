@@ -1,0 +1,14 @@
+{
+  "name": "duhahe",
+  "workers": [
+    {
+      "path": "apps/api",
+      "command": "npm run build"
+    }
+  ],
+  "pages": {
+    "projectName": "duhahe-admin",
+    "build": "npm run build -w @duhahe/admin",
+    "outputDirectory": "apps/admin/dist"
+  }
+}

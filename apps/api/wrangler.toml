@@ -1,0 +1,10 @@
+name = "duhahe-api"
+main = "src/server.ts"
+compatibility_date = "2026-10-22"
+compatibility_flags = []
+
+[env.production]
+node_id = "auto"
+
+[env.development]
+node_id = "auto"
