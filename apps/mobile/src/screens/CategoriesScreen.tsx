@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { CATEGORIES } from '@duhahe/shared';
 import CategoryImage from '../components/CategoryImage';
 import { useCatalog } from '../context/CatalogContext';
+import { useResponsive } from '../hooks/useResponsive';
 import Icon from '../components/Icon';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors, fontSizes, fonts, radii } from '../theme';
@@ -17,6 +18,7 @@ export default function CategoriesScreen() {
   const { t } = useTranslation();
   const nav = useNavigation<Nav>();
   const { products } = useCatalog();
+  const { itemWidth, gap, isDesktop } = useResponsive();
 
   const counts = useMemo(() => {
     const m = new Map<string, number>();
@@ -26,38 +28,45 @@ export default function CategoriesScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('tabs.categories')}</Text>
-        <Text style={styles.sub}>{t('home.categoriesTitle')}</Text>
-      </View>
-      <View style={styles.grid}>
-        {CATEGORIES.map((id) => (
-          <Pressable
-            key={id}
-            onPress={() => nav.navigate('Category', { category: id })}
-            style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-          >
-            <CategoryImage category={id} style={styles.img} />
-            <View style={styles.overlay}>
-              <Text style={styles.name} numberOfLines={1}>{t(`categories.${id}`)}</Text>
-              <View style={styles.countRow}>
-                <Text style={styles.count}>{counts.get(id) ?? 0}</Text>
-                <Icon name="arrow-right" size={13} color={colors.white} />
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.header}>
+          <Text style={styles.title}>{t('tabs.categories')}</Text>
+          <Text style={styles.sub}>{t('home.categoriesTitle')}</Text>
+        </View>
+        <View style={[styles.grid, { columnGap: gap, rowGap: gap }]}>
+          {CATEGORIES.map((id) => (
+            <Pressable
+              key={id}
+              onPress={() => nav.navigate('Category', { category: id })}
+              style={({ pressed }) => [
+                styles.card,
+                { width: itemWidth, height: isDesktop ? 190 : 150 },
+                pressed && styles.pressed,
+              ]}
+            >
+              <CategoryImage category={id} style={styles.img} />
+              <View style={styles.overlay}>
+                <Text style={styles.name} numberOfLines={1}>{t(`categories.${id}`)}</Text>
+                <View style={styles.countRow}>
+                  <Text style={styles.count}>{counts.get(id) ?? 0}</Text>
+                  <Icon name="arrow-right" size={13} color={colors.white} />
+                </View>
               </View>
-            </View>
-          </Pressable>
-        ))}
-      </View>
+            </Pressable>
+          ))}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  header: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 4 },
+  content: { paddingHorizontal: 16, paddingBottom: 24, width: '100%', maxWidth: 1280, alignSelf: 'center' },
+  header: { paddingTop: 6, paddingBottom: 4 },
   title: { fontSize: fontSizes.xxl, fontWeight: '900', color: colors.ink, fontFamily: fonts.black, letterSpacing: -0.5 },
   sub: { fontSize: fontSizes.sm, color: colors.muted, marginTop: 2 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14, paddingHorizontal: 16, paddingTop: 14 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', paddingTop: 14 },
   card: {
     width: '48.5%',
     height: 150,

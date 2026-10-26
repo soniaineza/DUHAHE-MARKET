@@ -11,6 +11,7 @@ import CategoryImage from '../components/CategoryImage';
 import Icon from '../components/Icon';
 import { haptic } from '../components/Toast';
 import { FEATURED_IDS } from '../data/discovery';
+import { useResponsive } from '../hooks/useResponsive';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors, fontSizes, fonts, radii, shadow } from '../theme';
 
@@ -20,6 +21,7 @@ export default function HomeScreen() {
   const { t } = useTranslation();
   const nav = useNavigation<Nav>();
   const { products, loading, refresh } = useCatalog();
+  const { itemWidth, gap } = useResponsive();
 
   const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const featured = useMemo(() => FEATURED_IDS.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => !!p), [byId]);
@@ -126,9 +128,9 @@ export default function HomeScreen() {
             <Text style={styles.seeAllText}>{t('common.seeAll')}</Text>
           </Pressable>
         </View>
-        <View style={styles.grid}>
+        <View style={[styles.grid, { columnGap: gap, rowGap: gap }]}>
           {featured.map((p) => (
-            <View key={p.id} style={styles.gridItem}>
+            <View key={p.id} style={[styles.gridItem, { width: itemWidth }]}>
               <ProductCard product={p} />
             </View>
           ))}
@@ -141,8 +143,8 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 24 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 },
+  content: { paddingHorizontal: 16, paddingBottom: 24, width: '100%', maxWidth: 1280, alignSelf: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6, width: '100%', maxWidth: 960, alignSelf: 'center' },
   locPin: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   locCity: { fontSize: fontSizes.lg, fontWeight: '800', color: colors.ink, fontFamily: fonts.bold, letterSpacing: -0.3 },
   locSubRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 1 },
@@ -160,6 +162,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     paddingHorizontal: 14,
     paddingVertical: 13,
+    width: '100%',
+    maxWidth: 620,
+    alignSelf: 'center',
     ...shadow.sm,
   },
   searchPlaceholder: { fontSize: fontSizes.md, color: colors.faint, fontWeight: '500' },
@@ -171,6 +176,9 @@ const styles = StyleSheet.create({
     borderRadius: radii.l,
     padding: 18,
     paddingRight: 14,
+    width: '100%',
+    maxWidth: 960,
+    alignSelf: 'center',
   },
   pressed: { opacity: 0.9 },
   promoTitle: { fontSize: fontSizes.lg, fontWeight: '900', color: colors.ink, fontFamily: fonts.extrabold, letterSpacing: -0.3 },
@@ -190,6 +198,6 @@ const styles = StyleSheet.create({
   catLabelItem: { marginRight: 10, width: 84, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
   catLabel: { fontSize: fontSizes.sm, fontWeight: '600', color: colors.ink },
   catCount: { fontSize: fontSizes.xs, color: colors.faint, fontWeight: '600' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' },
   gridItem: { width: '48.5%' },
 });

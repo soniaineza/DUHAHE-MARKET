@@ -234,11 +234,11 @@ const shadowSm = {    shadowColor: '#111111',
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: 8 },
+  navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: 8, width: '100%', maxWidth: 800, alignSelf: 'center' },
   backBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: fontSizes.xl, fontWeight: '900', color: colors.ink },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  content: { padding: 16, paddingBottom: 40, gap: 12 },
+  content: { padding: 16, paddingBottom: 40, gap: 12, width: '100%', maxWidth: 800, alignSelf: 'center' },
   hero: { borderRadius: radii.xl, padding: 22, ...shadowSm },
   heroTitle: { color: colors.white, fontSize: fontSizes.xl, fontWeight: '900', letterSpacing: -0.4 },
   heroSub: { color: 'rgba(255,255,255,0.9)', fontSize: fontSizes.xs, fontWeight: '600', marginTop: 4 },

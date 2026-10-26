@@ -64,15 +64,11 @@ export default function OrdersScreen() {
     show(t('common.addedToCart'), 'success');
   };
 
-  const payNow = async (o: Order) => {
-    try {
-      await api.createPayment({ method: 'mtn_momo', orderId: o.id, phone: o.customer.phone, amount: o.total });
-      haptic('success');
-      show(t('notifications.orderPaid'), 'success');
-      load(true);
-    } catch {
-      show(t('notifications.paymentFailed'), 'error');
-    }
+  const payNow = (o: Order) => {
+    haptic('medium');
+    // Open the live payment screen so the customer sees the MTN/Airtel prompt
+    // state, failures and retries instead of a fire-and-forget request.
+    nav.navigate('Payment', { order: o });
   };
 
   return (
@@ -209,10 +205,10 @@ function Timeline({ status }: { status: OrderStatus }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: 8 },
+  navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: 8, width: '100%', maxWidth: 900, alignSelf: 'center' },
   backBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: fontSizes.xl, fontWeight: '900', color: colors.ink },
-  searchRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginTop: 14, alignItems: 'center' },
+  searchRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginTop: 14, alignItems: 'center', width: '100%', maxWidth: 900, alignSelf: 'center' },
   inputWrap: {
     flex: 1,
     flexDirection: 'row',
@@ -226,7 +222,7 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, paddingVertical: 11, fontSize: fontSizes.md, color: colors.ink },
   loadBtn: { width: 44, height: 44, borderRadius: radii.m, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
-  content: { padding: 16, gap: 12, paddingBottom: 40 },
+  content: { padding: 16, gap: 12, paddingBottom: 40, width: '100%', maxWidth: 900, alignSelf: 'center' },
   card: {
     backgroundColor: colors.card,
     borderRadius: radii.l,

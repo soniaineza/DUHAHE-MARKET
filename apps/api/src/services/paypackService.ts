@@ -157,9 +157,16 @@ export async function getTransaction(ref: string): Promise<PaypackTransaction | 
     const data = await request('GET', `/events/transactions?ref=${encodeURIComponent(ref)}`, {}, token);
     const rows = Array.isArray(data?.transactions) ? data.transactions : [];
     // Newest event wins: a transaction may be created as `pending` and later
-    // processed as `successful` or `failed`.
-    for (let i = rows.length - 1; i >= 0; i -= 1) {
-      const d = rows[i]?.data ?? rows[i] ?? {};
+    // processed as `successful` or `failed`. Paypack returns events newest
+    // first today, but we sort explicitly so a reversed/changed feed cannot
+    // hide a terminal status behind the original `pending` event.
+    const newestFirst = [...rows].sort((a, b) => {
+      const ta = Date.parse(String(a?.created_at ?? a?.data?.processed_at ?? a?.data?.created_at ?? '')) || 0;
+      const tb = Date.parse(String(b?.created_at ?? b?.data?.processed_at ?? b?.data?.created_at ?? '')) || 0;
+      return tb - ta;
+    });
+    for (const row of newestFirst) {
+      const d = row?.data ?? row ?? {};
       const status = normalizeStatus(d.status);
       if (status) {
         return {

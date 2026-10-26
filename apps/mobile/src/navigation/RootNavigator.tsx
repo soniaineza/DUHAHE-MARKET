@@ -1,7 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import type { Order } from '@duhahe/shared';
@@ -99,12 +99,20 @@ function TabBarIcon({
 function TabNavigator() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const desktop = width >= 900;
+  // The storefront itself is capped at 1280px, so centre the desktop tab bar
+  // inside that frame rather than inside the full browser window.
+  const desktopInset = Math.max(0, (Math.min(width, 1280) - 760) / 2);
 
   const tabBarStyle = [
     styles.tabBar,
+    desktop && styles.tabBarDesktop,
     {
-      height: TAB_BAR_BASE_HEIGHT + insets.bottom,
-      paddingBottom: 14 + insets.bottom,
+      left: desktop ? desktopInset : 0,
+      right: desktop ? desktopInset : 0,
+      height: desktop ? 74 : TAB_BAR_BASE_HEIGHT + insets.bottom,
+      paddingBottom: desktop ? 10 : 14 + insets.bottom,
     },
   ];
 
@@ -308,6 +316,15 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: -4 },
     elevation: 10,
+  },
+
+  tabBarDesktop: {
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: colors.divider,
+    borderTopLeftRadius: radii.l,
+    borderTopRightRadius: radii.l,
+    shadowOpacity: 0.08,
   },
 
   tabLabel: {

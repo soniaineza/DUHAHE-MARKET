@@ -10,6 +10,7 @@ import Icon from '../components/Icon';
 import { haptic } from '../components/Toast';
 import { useCatalog } from '../context/CatalogContext';
 import { categoryPhotoUrl } from '../lib/productImage';
+import { useResponsive } from '../hooks/useResponsive';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors, fontSizes, fonts, radii } from '../theme';
 
@@ -24,6 +25,7 @@ export default function CategoryScreen() {
   const route = useRoute<Route>();
   const category = route.params.category;
   const { products } = useCatalog();
+  const { itemWidth, gap, isDesktop } = useResponsive();
   const [sort, setSort] = useState<(typeof SORTS)[number]>('default');
 
   const items = useMemo(() => {
@@ -51,7 +53,7 @@ export default function CategoryScreen() {
       </View>
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 24 + insets.bottom }]} showsVerticalScrollIndicator={false}>
-        <View style={styles.banner}>
+        <View style={[styles.banner, isDesktop && styles.bannerDesktop]}>
           <Image source={{ uri: categoryPhotoUrl(category as CategoryId) }} style={styles.bannerImg} resizeMode="cover" />
           <View style={styles.bannerOverlay} />
           <View style={styles.bannerText}>
@@ -77,9 +79,9 @@ export default function CategoryScreen() {
           })}
         </View>
 
-        <View style={styles.grid}>
+        <View style={[styles.grid, { columnGap: gap, rowGap: gap }]}>
           {items.map((p) => (
-            <View key={p.id} style={styles.gridItem}>
+            <View key={p.id} style={[styles.gridItem, { width: itemWidth }]}>
               <ProductCard product={p} />
             </View>
           ))}
@@ -96,8 +98,9 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8 },
   backBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   title: { flex: 1, textAlign: 'center', fontSize: fontSizes.lg, fontWeight: '800', color: colors.ink, fontFamily: fonts.bold },
-  content: { paddingHorizontal: 16 },
+  content: { paddingHorizontal: 16, width: '100%', maxWidth: 1280, alignSelf: 'center' },
   banner: { marginTop: 14, height: 150, borderRadius: radii.l, overflow: 'hidden', backgroundColor: colors.primarySoft },
+  bannerDesktop: { height: 220 },
   bannerImg: { width: '100%', height: '100%' },
   bannerOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(8,116,67,0.35)' },
   bannerText: { position: 'absolute', left: 16, bottom: 12 },
@@ -108,6 +111,6 @@ const styles = StyleSheet.create({
   sortChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   sortText: { fontSize: fontSizes.sm, color: colors.muted, fontWeight: '600' },
   sortTextActive: { color: colors.white, fontWeight: '800' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' },
   gridItem: { width: '48.5%' },
 });

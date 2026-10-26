@@ -82,7 +82,7 @@ const shadow = {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28 },
+  wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, width: '100%', maxWidth: 560, alignSelf: 'center' },
   checkCircle: { width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center', ...shadow, marginBottom: 24 },
   title: { fontSize: fontSizes.xl, fontWeight: '900', color: colors.ink, textAlign: 'center' },
   card: {

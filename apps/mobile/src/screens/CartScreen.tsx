@@ -142,11 +142,11 @@ export default function CartScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  header: { flexDirection: 'row', alignItems: 'baseline', gap: 10, paddingHorizontal: 16, marginTop: 8 },
+  header: { flexDirection: 'row', alignItems: 'baseline', gap: 10, paddingHorizontal: 16, marginTop: 8, width: '100%', maxWidth: 900, alignSelf: 'center' },
   title: { fontSize: fontSizes.xxl, fontWeight: '900', color: colors.ink, letterSpacing: -0.4 },
   itemCount: { fontSize: fontSizes.sm, color: colors.faint, fontWeight: '600' },
   emptyWrap: { flex: 1, justifyContent: 'center' },
-  content: { padding: 16, gap: 12 },
+  content: { padding: 16, gap: 12, width: '100%', maxWidth: 900, alignSelf: 'center' },
   progressCard: { backgroundColor: colors.card, borderRadius: radii.m, borderWidth: 1, borderColor: colors.border, padding: 12, marginBottom: 2 },
   progressHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   progressText: { flex: 1, fontSize: fontSizes.xs, color: colors.harvest500, fontWeight: '700', lineHeight: 16 },
@@ -180,6 +180,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.card,
     gap: 12,
+    width: '100%',
+    maxWidth: 900,
+    alignSelf: 'center',
   },
   summary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   summaryRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

@@ -258,7 +258,7 @@ function Step({ icon, label, active, spinner }: { icon: IconName; label: string;
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  wrap: { flex: 1, justifyContent: 'center', padding: 20, gap: 18 },
+  wrap: { flex: 1, justifyContent: 'center', padding: 20, gap: 18, width: '100%', maxWidth: 560, alignSelf: 'center' },
   card: { backgroundColor: colors.card, borderRadius: radii.xl, borderWidth: 1, borderColor: colors.border, padding: 18, ...shadow.md },
   providerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   providerTile: { width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },

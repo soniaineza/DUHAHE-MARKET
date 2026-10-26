@@ -29,7 +29,7 @@ npm install
 npm run api        # http://localhost:4000  (tsx watch, auto-reload)
 ```
 
-Demo admin login: `admin@duhahe.rw` / `admin123` (change in `apps/api/.env`).
+Admin dashboard login uses `ADMIN_EMAIL` / `ADMIN_PASSWORD` from `apps/api/.env` (or the host's environment variables in production).
 
 ### 2. Run the admin dashboard
 

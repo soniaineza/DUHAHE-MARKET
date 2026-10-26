@@ -8,6 +8,7 @@ import EmptyState from '../components/EmptyState';
 import Icon from '../components/Icon';
 import { useCatalog } from '../context/CatalogContext';
 import { useFavorites } from '../context/FavoritesContext';
+import { useResponsive } from '../hooks/useResponsive';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors, fontSizes, fonts, radii } from '../theme';
 
@@ -18,6 +19,7 @@ export default function FavoritesScreen() {
   const nav = useNavigation<Nav>();
   const { products } = useCatalog();
   const { ids } = useFavorites();
+  const { itemWidth, gap } = useResponsive();
   const insets = useSafeAreaInsets();
 
   const items = products.filter((p) => ids.includes(p.id));
@@ -46,9 +48,9 @@ export default function FavoritesScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 24 + insets.bottom }]} showsVerticalScrollIndicator={false}>
-          <View style={styles.grid}>
+          <View style={[styles.grid, { columnGap: gap, rowGap: gap }]}>
             {items.map((p) => (
-              <View key={p.id} style={styles.gridItem}>
+              <View key={p.id} style={[styles.gridItem, { width: itemWidth }]}>
                 <ProductCard product={p} />
               </View>
             ))}
@@ -66,7 +68,7 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 8 },
   backBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   title: { flex: 1, textAlign: 'center', fontSize: fontSizes.lg, fontWeight: '800', color: colors.ink, fontFamily: fonts.bold },
-  content: { paddingHorizontal: 16, paddingTop: 14 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14 },
+  content: { paddingHorizontal: 16, paddingTop: 14, width: '100%', maxWidth: 1280, alignSelf: 'center' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' },
   gridItem: { width: '48.5%' },
 });

@@ -110,10 +110,10 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: 8 },
+  navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: 8, width: '100%', maxWidth: 800, alignSelf: 'center' },
   backBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: fontSizes.xl, fontWeight: '900', color: colors.ink },
-  content: { padding: 16, gap: 10, paddingBottom: 40 },
+  content: { padding: 16, gap: 10, paddingBottom: 40, width: '100%', maxWidth: 800, alignSelf: 'center' },
   card: {
     flexDirection: 'row',
     gap: 12,

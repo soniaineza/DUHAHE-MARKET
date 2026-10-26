@@ -212,11 +212,11 @@ export default function AddressesScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: 8 },
+  navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: 8, width: '100%', maxWidth: 720, alignSelf: 'center' },
   backBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: fontSizes.xl, fontWeight: '900', color: colors.ink },
   addBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
-  content: { padding: 16, paddingBottom: 40, gap: 12 },
+  content: { padding: 16, paddingBottom: 40, gap: 12, width: '100%', maxWidth: 720, alignSelf: 'center' },
   sectionTitle: { fontSize: fontSizes.sm, fontWeight: '800', color: colors.muted, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 },
   card: { backgroundColor: colors.card, borderRadius: radii.l, borderWidth: 1, borderColor: colors.border, padding: 14 },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

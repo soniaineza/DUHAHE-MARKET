@@ -18,6 +18,7 @@ import type { PaymentMethod } from '@duhahe/shared';
 import { addressApi, api, type SavedAddress } from '../api';
 import { useApp } from '../context/AppContext';
 import { useCart } from '../context/CartContext';
+import { useResponsive } from '../hooks/useResponsive';
 import { fmtRWF } from '../components/Money';
 import Icon, { type IconName } from '../components/Icon';
 import { haptic } from '../components/Toast';
@@ -118,6 +119,7 @@ export default function CheckoutScreen() {
   const districts = DISTRICTS[lang];
   // Edge-to-edge APK: keep the fixed Place-Order bar above the system nav bar.
   const insets = useSafeAreaInsets();
+  const { isDesktop } = useResponsive();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -200,7 +202,7 @@ export default function CheckoutScreen() {
           </Section>
 
           <Section icon="credit-card-outline" title={t('checkout.paymentMethod')}>
-            <View style={styles.payList}>
+            <View style={[styles.payList, isDesktop && styles.payListDesktop]}>
               {(['mtn_momo', 'airtel_money', 'cash_on_delivery'] as PaymentMethod[]).map((m) => {
                 const meta = paymentMeta[m];
                 const active = method === m;
@@ -208,7 +210,12 @@ export default function CheckoutScreen() {
                   <Pressable
                     key={m}
                     onPress={() => { setMethod(m); haptic('light'); }}
-                    style={({ pressed }) => [styles.payCard, active && styles.payCardActive, pressed && { opacity: 0.9 }]}
+                    style={({ pressed }) => [
+                      styles.payCard,
+                      isDesktop && styles.payCardDesktop,
+                      active && styles.payCardActive,
+                      pressed && { opacity: 0.9 },
+                    ]}
                   >
                     <View style={[styles.payTile, { backgroundColor: meta.tile[0] }]}>
                       <Icon name={meta.icon} size={20} color={colors.white} />
@@ -285,10 +292,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: 8 },
+  navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginTop: 8, width: '100%', maxWidth: 720, alignSelf: 'center' },
   backBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: fontSizes.xl, fontWeight: '900', color: colors.ink },
-  content: { padding: 16, paddingBottom: 40, gap: 14 },
+  content: { padding: 16, paddingBottom: 40, gap: 14, width: '100%', maxWidth: 720, alignSelf: 'center' },
   section: { backgroundColor: colors.card, borderRadius: radii.l, borderWidth: 1, borderColor: colors.border, padding: 14 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
   sectionIcon: { width: 26, height: 26, borderRadius: 13, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
@@ -317,6 +324,8 @@ const styles = StyleSheet.create({
   chipText: { fontSize: fontSizes.sm, color: colors.ink },
   chipTextActive: { color: colors.white, fontWeight: '700' },
   payList: { gap: 8 },
+  payListDesktop: { flexDirection: 'row', flexWrap: 'wrap' },
+  payCardDesktop: { flexGrow: 1, flexBasis: 200 },
   addrRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -360,7 +369,7 @@ const styles = StyleSheet.create({
   totalLabel: { fontSize: fontSizes.md, fontWeight: '800', color: colors.ink },
   totalValue: { fontSize: fontSizes.lg, fontWeight: '900', color: colors.accent },
   error: { color: colors.danger, fontSize: fontSizes.sm, textAlign: 'center' },
-  footer: { padding: 16, borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+  footer: { padding: 16, borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.card, width: '100%', maxWidth: 720, alignSelf: 'center' },
   placeBtn: {
     flexDirection: 'row',
     alignItems: 'center',

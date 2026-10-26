@@ -115,7 +115,7 @@ function MenuItem({ icon, label, onPress, open }: { icon: IconName; label: strin
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: 16, paddingBottom: 40 },
+  content: { padding: 16, paddingBottom: 40, width: '100%', maxWidth: 720, alignSelf: 'center' },
   greetingRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 8 },
   avatar: { width: 58, height: 58, borderRadius: 29, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: fontSizes.xl, fontWeight: '900', color: colors.white, fontFamily: fonts.black },

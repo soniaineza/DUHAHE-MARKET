@@ -33,6 +33,8 @@ const theme = {
 };
 
 const styles = StyleSheet.create({
+  shell: { flex: 1, backgroundColor: colors.chip },
+  frame: { flex: 1, width: '100%', maxWidth: 1280, alignSelf: 'center', backgroundColor: colors.bg },
   boot: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
   bootErrorText: { color: colors.muted, marginTop: 14, fontSize: 14, textAlign: 'center', paddingHorizontal: 32 },
   retryBtn: { marginTop: 18, backgroundColor: colors.primary, borderRadius: 999, paddingHorizontal: 28, paddingVertical: 10 },
@@ -77,16 +79,20 @@ function AppInner({ onRetryFonts }: { onRetryFonts: () => void }) {
 
   return (
     <SafeAreaProvider>
-      <ToastProvider>
-        <CartProvider>
-          <FavoritesProvider>
-            <NavigationContainer theme={theme}>
-              <StatusBar style="dark" />
-              <RootNavigator />
-            </NavigationContainer>
-          </FavoritesProvider>
-        </CartProvider>
-      </ToastProvider>
+      <View style={styles.shell}>
+        <View style={styles.frame}>
+          <ToastProvider>
+            <CartProvider>
+              <FavoritesProvider>
+                <NavigationContainer theme={theme}>
+                  <StatusBar style="dark" />
+                  <RootNavigator />
+                </NavigationContainer>
+              </FavoritesProvider>
+            </CartProvider>
+          </ToastProvider>
+        </View>
+      </View>
     </SafeAreaProvider>
   );
 }

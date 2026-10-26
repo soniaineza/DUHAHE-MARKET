@@ -7,8 +7,16 @@ const allowedLangs: Language[] = ['en', 'kin', 'fr'];
 
 export const publicRouter = Router();
 
+const startedAt = new Date().toISOString();
+
 publicRouter.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'duhahe-api', time: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    service: 'duhahe-api',
+    time: new Date().toISOString(),
+    startedAt,
+    commit: (process.env.RENDER_GIT_COMMIT ?? '').slice(0, 7) || undefined,
+  });
 });
 
 publicRouter.get('/categories', (req, res) => {

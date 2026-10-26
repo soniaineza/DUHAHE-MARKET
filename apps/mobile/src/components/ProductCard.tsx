@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { Product } from '@duhahe/shared';
@@ -37,6 +37,8 @@ const unitShort: Record<string, Record<'en' | 'kin' | 'fr', string>> = {
 
 export default function ProductCard({ product, onPress, qtyInCart = 0, wide = false, compact = false, showFavorite = true }: Props) {
   const { lang } = useApp();
+  const { width } = useWindowDimensions();
+  const desktop = width >= 900;
   const cart = useCart();
   const fav = useFavorites();
   const { show } = useToast();
@@ -59,7 +61,11 @@ export default function ProductCard({ product, onPress, qtyInCart = 0, wide = fa
       style={({ pressed }) => [styles.card, wide && styles.cardWide, compact && styles.cardCompact, pressed && styles.pressed]}
     >
       <View style={styles.tile}>
-        <ProductImage product={product} style={[styles.tileImg, compact && styles.tileImgCompact, wide && styles.tileImgWide]} resizeMode="cover" />
+        <ProductImage
+          product={product}
+          style={[styles.tileImg, compact && styles.tileImgCompact, wide && styles.tileImgWide, desktop && !wide && !compact && styles.tileImgDesktop]}
+          resizeMode="cover"
+        />
         {product.organic && (
           <View style={styles.organic}>
             <Icon name="leaf" size={9} color={colors.primary} />
@@ -129,6 +135,7 @@ const styles = StyleSheet.create({
   tileImg: { height: 116 },
   tileImgWide: { height: 124 },
   tileImgCompact: { height: 92 },
+  tileImgDesktop: { height: 190 },
   organic: {
     position: 'absolute',
     top: 8,

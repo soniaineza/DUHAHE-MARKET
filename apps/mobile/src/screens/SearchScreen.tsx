@@ -13,6 +13,7 @@ import EmptyState from '../components/EmptyState';
 import Icon from '../components/Icon';
 import { haptic } from '../components/Toast';
 import { POPULAR_SEARCHES, SUGGESTED_SEARCHES, pick } from '../data/discovery';
+import { useResponsive } from '../hooks/useResponsive';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors, fontSizes, radii } from '../theme';
 
@@ -25,6 +26,7 @@ export default function SearchScreen() {
   const nav = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { search: searchProducts } = useCatalog();
+  const { itemWidth, gap } = useResponsive();
   const [query, setQuery] = useState(route.params?.q ?? '');
   const [recent, setRecent] = useState<string[]>([]);
 
@@ -47,13 +49,15 @@ export default function SearchScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <SearchField
-          value={query}
-          onChangeText={setQuery}
-          placeholder={t('search.placeholder')}
-          onClear={() => setQuery('')}
-          onSubmitEditing={() => commit(query)}
-        />
+        <View style={styles.searchWrap}>
+          <SearchField
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t('search.placeholder')}
+            onClear={() => setQuery('')}
+            onSubmitEditing={() => commit(query)}
+          />
+        </View>
 
         {!searching ? (
           <>
@@ -103,9 +107,9 @@ export default function SearchScreen() {
             {products.length > 0 && (
               <View style={styles.block}>
                 <Text style={styles.blockTitle}>{t('search.products')}</Text>
-                <View style={styles.grid}>
+                <View style={[styles.grid, { columnGap: gap, rowGap: gap }]}>
                   {products.slice(0, 24).map((p) => (
-                    <View key={p.id} style={styles.gridItem}>
+                    <View key={p.id} style={[styles.gridItem, { width: itemWidth }]}>
                       <ProductCard product={p} onPress={() => nav.navigate('ProductDetails', { productId: p.id })} />
                     </View>
                   ))}
@@ -131,7 +135,8 @@ export default function SearchScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 130, paddingTop: 10 },
+  content: { paddingHorizontal: 16, paddingBottom: 130, paddingTop: 10, width: '100%', maxWidth: 1280, alignSelf: 'center' },
+  searchWrap: { width: '100%', maxWidth: 720, alignSelf: 'center' },
   block: { marginTop: 24 },
   blockHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   blockTitle: { fontSize: fontSizes.lg, fontWeight: '900', color: colors.ink, letterSpacing: -0.3 },
@@ -150,6 +155,6 @@ const styles = StyleSheet.create({
   popRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.divider },
   popIndex: { fontSize: fontSizes.xs, color: colors.faint, fontWeight: '800', width: 26 },
   popLabel: { fontSize: fontSizes.md, fontWeight: '700', color: colors.ink },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' },
   gridItem: { width: '48.5%' },
 });

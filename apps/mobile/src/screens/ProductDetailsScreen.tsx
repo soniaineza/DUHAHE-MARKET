@@ -13,6 +13,7 @@ import { useApp } from '../context/AppContext';
 import { useCart } from '../context/CartContext';
 import { useFavorites } from '../context/FavoritesContext';
 import { useCatalog } from '../context/CatalogContext';
+import { useResponsive } from '../hooks/useResponsive';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors, fontSizes, fonts, radii, shadow } from '../theme';
 
@@ -42,6 +43,7 @@ export default function ProductDetailsScreen() {
   const cart = useCart();
   const fav = useFavorites();
   const { show } = useToast();
+  const { isDesktop } = useResponsive();
 
   const product = useMemo(() => products.find((p) => p.id === route.params.productId), [products, route.params.productId]);
 
@@ -95,9 +97,14 @@ export default function ProductDetailsScreen() {
       </SafeAreaView>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <ProductImage product={product} style={styles.photo} resizeMode="cover" />
+        <View style={[styles.layout, isDesktop && styles.layoutDesktop]}>
+          <ProductImage
+            product={product}
+            style={[styles.photo, isDesktop && styles.photoDesktop]}
+            resizeMode="cover"
+          />
 
-        <View style={styles.body}>
+          <View style={[styles.body, isDesktop && styles.bodyDesktop]}>
           <View style={styles.tagsRow}>
             {product.organic && (
               <View style={styles.tag}><Icon name="leaf" size={12} color={colors.primary} /><Text style={styles.tagText}>{t('product.organic')}</Text></View>
@@ -147,6 +154,7 @@ export default function ProductDetailsScreen() {
               <Text style={styles.label}>{t('common.total')}</Text>
               <Text style={styles.lineTotal}>{fmtRWF(qty * product.price)}</Text>
             </View>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -174,13 +182,17 @@ export default function ProductDetailsScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   topSafe: { backgroundColor: colors.bg },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingTop: 6, paddingBottom: 8 },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingTop: 6, paddingBottom: 8, width: '100%', maxWidth: 1200, alignSelf: 'center' },
   circleBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   missing: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
   missingText: { fontSize: fontSizes.md, color: colors.muted, fontWeight: '600' },
-  content: { paddingBottom: 24 },
+  content: { paddingBottom: 24, width: '100%', maxWidth: 1200, alignSelf: 'center' },
+  layout: { width: '100%' },
+  layoutDesktop: { flexDirection: 'row', alignItems: 'flex-start', gap: 28, padding: 20 },
   photo: { width: '100%', height: 270 },
+  photoDesktop: { width: '48%', height: 520, borderRadius: radii.l, overflow: 'hidden' },
   body: { paddingHorizontal: 16, paddingTop: 16 },
+  bodyDesktop: { flex: 1, paddingHorizontal: 0, paddingTop: 4, maxWidth: 560 },
   tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tag: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: colors.primarySoft, borderRadius: radii.s, paddingHorizontal: 9, paddingVertical: 5 },
   tagText: { fontSize: fontSizes.xs, color: colors.primary, fontWeight: '700' },
@@ -202,8 +214,8 @@ const styles = StyleSheet.create({
   qtyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderColor: colors.divider },
   label: { fontSize: fontSizes.xs, color: colors.faint, marginBottom: 6, fontWeight: '700' },
   lineTotal: { fontSize: fontSizes.lg, fontWeight: '800', color: colors.ink },
-  footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 20, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface },
-  addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, borderRadius: radii.m, paddingVertical: 15, ...shadow.sm },
+  footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 20, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface, width: '100%', maxWidth: 1200, alignSelf: 'center' },
+  addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, borderRadius: radii.m, paddingVertical: 15, width: '100%', maxWidth: 560, alignSelf: 'center', ...shadow.sm },
   addBtnPressed: { backgroundColor: colors.primaryDark },
   addBtnDisabled: { backgroundColor: colors.chip },
   addBtnText: { color: colors.white, fontSize: fontSizes.md, fontWeight: '800' },
