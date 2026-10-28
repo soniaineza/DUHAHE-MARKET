@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import type { PaymentMethod } from '@duhahe/shared';
+import { normalizeProvince, provinceOfDistrict, type PaymentMethod } from '@duhahe/shared';
 import { calculateOrder, createOrderFromInput, listOrders } from '../services/orderService';
 import { initiatePayment, syncOrderPayment } from '../services/paymentService';
 import { signCustomerToken, verifyCustomerToken, hashPassword, verifyPassword } from '../services/authService';
@@ -168,7 +168,7 @@ customerRouter.post('/addresses', (req, res) => {
     phone,
     label: typeof label === 'string' && label.trim() ? label.trim() : district,
     name: String(name).trim(),
-    province: String(province).trim(),
+    province: provinceOfDistrict(String(district)) ?? normalizeProvince(String(province)) ?? String(province).trim(),
     district: String(district).trim(),
     address: typeof address === 'string' && address.trim() ? address.trim() : undefined,
     isDefault: !!isDefault,

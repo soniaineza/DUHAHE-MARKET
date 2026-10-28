@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type Order } from '../api';
-import type { OrderStatus } from '@duhahe/shared';
+import { PROVINCE_KEYS, PROVINCE_LABELS, normalizeProvince, provinceOfDistrict, type OrderStatus } from '@duhahe/shared';
 import { OrderStatusBadge } from '../components/OrderStatusBadge';
 import { SearchIcon, DownIcon } from '../components/Icons';
 import { useAdminI18n } from '../i18n';
@@ -15,6 +15,7 @@ export default function Orders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [filter, setFilter] = useState<OrderStatus | 'all'>('all');
   const [query, setQuery] = useState('');
+  const [province, setProvince] = useState('all');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [error, setError] = useState('');
 
@@ -37,13 +38,14 @@ export default function Orders() {
     const q = query.trim().toLowerCase();
     return orders.filter((o) => {
       if (filter !== 'all' && o.status !== filter) return false;
+      if (province !== 'all' && (provinceOfDistrict(o.customer.district) ?? normalizeProvince(o.customer.province)) !== province) return false;
       if (q) {
-        const hay = [o.orderNumber, o.customer.name, o.customer.phone, o.customer.district ?? ''].join(' ').toLowerCase();
+        const hay = [o.orderNumber, o.customer.name, o.customer.phone, o.customer.district ?? '', o.customer.province ?? ''].join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [orders, filter, query]);
+  }, [orders, filter, query, province]);
 
   const advanceStatus = async (o: Order, to: OrderStatus) => {
     const note =
@@ -68,7 +70,18 @@ export default function Orders() {
           <h1 className="text-2xl font-black tracking-tight">{t('orders')}</h1>
           <p className="text-sm text-muted mt-0.5">{counts.all} · {counts.pending} {t('pendingAction')}</p>
         </div>
-        <div className="relative">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+        <select
+          value={province}
+          onChange={(e) => setProvince(e.target.value)}
+          className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-leaf-500"
+        >
+          <option value="all">{t('province')}: {t('all')}</option>
+          {PROVINCE_KEYS.map((p) => (
+            <option key={p} value={p}>{PROVINCE_LABELS[p][lang as 'en' | 'kin' | 'fr'] ?? p}</option>
+          ))}
+        </select>
+        <div className="relative flex-1 sm:flex-none">
           <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-faint">
             <SearchIcon size={16} />
           </div>
@@ -78,6 +91,7 @@ export default function Orders() {
             placeholder={t('searchOrders')}
             className="w-72 rounded-xl border border-line bg-white pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-leaf-500"
           />
+        </div>
         </div>
       </div>
 
@@ -111,7 +125,7 @@ export default function Orders() {
                 </span>
                 <div className="min-w-0">
                   <div className="font-bold text-soft truncate">{o.customer.name}</div>
-                  <div className="text-xs text-faint">{o.customer.phone} · {o.customer.district ?? '—'}</div>
+                  <div className="text-xs text-faint">{o.customer.phone} · {o.customer.district ?? '—'}{o.customer.province ? `, ${PROVINCE_LABELS[normalizeProvince(o.customer.province) ?? 'Kigali City']?.[lang as 'en' | 'kin' | 'fr'] ?? o.customer.province}` : ''}</div>
                 </div>
               </div>
               <div className="flex items-center gap-4">

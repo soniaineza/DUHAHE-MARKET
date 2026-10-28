@@ -14,7 +14,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
-import type { PaymentMethod } from '@duhahe/shared';
+import { DISTRICTS_BY_PROVINCE, normalizeProvince, PROVINCE_KEYS, PROVINCE_LABELS, provinceOfDistrict, type PaymentMethod, type ProvinceKey } from '@duhahe/shared';
 import { addressApi, api, type SavedAddress } from '../api';
 import { useApp } from '../context/AppContext';
 import { useCart } from '../context/CartContext';
@@ -27,16 +27,6 @@ import { colors, fontSizes, radii } from '../theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const PROVINCES = {
-  en: ['Kigali City', 'Northern', 'Southern', 'Eastern', 'Western'],
-  kin: ['Umujyi wa Kigali', 'Amajyaruguru', 'Amajyepfo', 'Iburasirazuba', 'Uburengerazuba'],
-  fr: ['Ville de Kigali', 'Nord', 'Sud', 'Est', 'Ouest'],
-};
-const DISTRICTS = {
-  en: ['Gasabo', 'Kicukiro', 'Nyarugenge', 'Musanze', 'Huye', 'Rubavu', 'Nyagatare', 'Bugesera', 'Kayonza', 'Rwamagana'],
-  kin: ['Gasabo', 'Kicukiro', 'Nyarugenge', 'Musanze', 'Huye', 'Rubavu', 'Nyagatare', 'Bugesera', 'Kayonza', 'Rwamagana'],
-  fr: ['Gasabo', 'Kicukiro', 'Nyarugenge', 'Musanze', 'Huye', 'Rubavu', 'Nyagatare', 'Bugesera', 'Kayonza', 'Rwamagana'],
-};
 
 const paymentMeta: Record<PaymentMethod, { icon: IconName; tile: readonly [string, string]; note: string }> = {
   mtn_momo: { icon: 'cellphone', tile: ['#ffcb05', '#f5b800'], note: 'MTN' },
@@ -53,7 +43,7 @@ export default function CheckoutScreen() {
   const [name, setName] = useState(user?.name ?? profile?.name ?? '');
   const [phone, setPhone] = useState(user?.phone ?? profile?.phone ?? '');
   const [email, setEmail] = useState(profile?.email ?? '');
-  const [province, setProvince] = useState(profile?.province ?? '');
+  const [province, setProvince] = useState<string>(normalizeProvince(profile?.province) ?? provinceOfDistrict(profile?.district) ?? '');
   const [district, setDistrict] = useState(profile?.district ?? '');
   const [address, setAddress] = useState(profile?.address ?? '');
   const [note, setNote] = useState('');
@@ -73,14 +63,14 @@ export default function CheckoutScreen() {
   const applyAddress = (a: SavedAddress) => {
     setName(a.name);
     setPhone(a.phone);
-    setProvince(a.province);
+    setProvince(normalizeProvince(a.province) ?? provinceOfDistrict(a.district) ?? '');
     setDistrict(a.district);
     setAddress(a.address ?? '');
     setSelectedId(a.id);
     haptic('light');
   };
 
-  const deliveryFee = useMemo(() => (district === 'Gasabo' || district === 'Kicukiro' || district === 'Nyarugenge' ? 1000 : 2500), [district]);
+  const deliveryFee = useMemo(() => (provinceOfDistrict(district) === 'Kigali City' ? 1000 : 2500), [district]);
   const total = cart.subtotal + deliveryFee;
 
   const canSubmit = name.trim() && phone.trim().length >= 9 && district && cart.lines.length > 0;
@@ -115,8 +105,7 @@ export default function CheckoutScreen() {
     }
   };
 
-  const provinces = PROVINCES[lang];
-  const districts = DISTRICTS[lang];
+  const districts = province ? DISTRICTS_BY_PROVINCE[province as ProvinceKey] ?? [] : [];
   // Edge-to-edge APK: keep the fixed Place-Order bar above the system nav bar.
   const insets = useSafeAreaInsets();
   const { isDesktop } = useResponsive();
@@ -175,9 +164,9 @@ export default function CheckoutScreen() {
           <Section icon="map-marker-radius-outline" title={t('checkout.delivery')}>
             <Field label={t('checkout.province')}>
               <View style={styles.chips}>
-                {provinces.map((p) => (
-                  <Pressable key={p} onPress={() => setProvince(p)} style={({ pressed }) => [styles.chip, province === p && styles.chipActive, pressed && { opacity: 0.85 }]}>
-                    <Text style={[styles.chipText, province === p && styles.chipTextActive]}>{p}</Text>
+                {PROVINCE_KEYS.map((p) => (
+                  <Pressable key={p} onPress={() => { setProvince(p); if (provinceOfDistrict(district) !== p) setDistrict(''); }} style={({ pressed }) => [styles.chip, province === p && styles.chipActive, pressed && { opacity: 0.85 }]}>
+                    <Text style={[styles.chipText, province === p && styles.chipTextActive]}>{PROVINCE_LABELS[p][lang]}</Text>
                   </Pressable>
                 ))}
               </View>

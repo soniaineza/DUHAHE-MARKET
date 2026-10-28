@@ -10,16 +10,11 @@ import EmptyState from '../components/EmptyState';
 import Icon from '../components/Icon';
 import { haptic, useToast } from '../components/Toast';
 import type { RootStackParamList } from '../navigation/RootNavigator';
+import { DISTRICTS_BY_PROVINCE, PROVINCE_KEYS, PROVINCE_LABELS, provinceOfDistrict, type ProvinceKey } from '@duhahe/shared';
 import { colors, fontSizes, radii } from '../theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const PROVINCES = {
-  en: ['Kigali City', 'Northern', 'Southern', 'Eastern', 'Western'],
-  kin: ['Umujyi wa Kigali', 'Amajyaruguru', 'Amajyepfo', 'Iburasirazuba', 'Uburengerazuba'],
-  fr: ['Ville de Kigali', 'Nord', 'Sud', 'Est', 'Ouest'],
-};
-const DISTRICTS = ['Gasabo', 'Kicukiro', 'Nyarugenge', 'Musanze', 'Huye', 'Rubavu', 'Nyagatare', 'Bugesera', 'Kayonza', 'Rwamagana'];
 
 export default function AddressesScreen() {
   const { t } = useTranslation();
@@ -109,7 +104,8 @@ export default function AddressesScreen() {
     }
   };
 
-  const provinces = PROVINCES[lang as 'en' | 'kin' | 'fr'];
+  const l = lang as 'en' | 'kin' | 'fr';
+  const districts = province ? DISTRICTS_BY_PROVINCE[province as ProvinceKey] ?? [] : [];
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -176,16 +172,16 @@ export default function AddressesScreen() {
 
             <Text style={styles.fieldLabel}>{t('checkout.province')}</Text>
             <View style={styles.chips}>
-              {provinces.map((p) => (
-                <Pressable key={p} onPress={() => setProvince(p)} style={({ pressed }) => [styles.chip, province === p && styles.chipActive, pressed && { opacity: 0.85 }]}>
-                  <Text style={[styles.chipText, province === p && styles.chipTextActive]}>{p}</Text>
+              {PROVINCE_KEYS.map((p) => (
+                <Pressable key={p} onPress={() => { setProvince(p); if (provinceOfDistrict(district) !== p) setDistrict(''); }} style={({ pressed }) => [styles.chip, province === p && styles.chipActive, pressed && { opacity: 0.85 }]}>
+                  <Text style={[styles.chipText, province === p && styles.chipTextActive]}>{PROVINCE_LABELS[p][l]}</Text>
                 </Pressable>
               ))}
             </View>
 
             <Text style={styles.fieldLabel}>{t('checkout.district')}</Text>
             <View style={styles.chips}>
-              {DISTRICTS.map((d) => (
+              {districts.map((d) => (
                 <Pressable key={d} onPress={() => setDistrict(d)} style={({ pressed }) => [styles.chip, district === d && styles.chipActive, pressed && { opacity: 0.85 }]}>
                   <Text style={[styles.chipText, district === d && styles.chipTextActive]}>{d}</Text>
                 </Pressable>

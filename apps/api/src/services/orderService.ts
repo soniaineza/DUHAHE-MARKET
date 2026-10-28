@@ -1,4 +1,4 @@
-import { getProductById, type Customer, type Order, type OrderItem, type PaymentMethod } from '@duhahe/shared';
+import { getProductById, normalizeProvince, provinceOfDistrict, type Customer, type Order, type OrderItem, type PaymentMethod } from '@duhahe/shared';
 import { DELIVERY_FEE_KIGALI, DELIVERY_FEE_PROVINCE, KIGALI_DISTRICTS } from '../config';
 import { createOrder, orders as storeOrders, pushNotification } from '../data/store';
 
@@ -68,6 +68,8 @@ export function createOrderFromInput(input: {
   paymentMethod: PaymentMethod;
   note?: string;
 }): CreateOrderResult {
+  const province = provinceOfDistrict(input.customer.district) ?? normalizeProvince(input.customer.province);
+  if (province) input.customer = { ...input.customer, province };
   const calc = calculateOrder(input.items, input.customer.district);
   if (calc.errors) {
     return { order: null as unknown as Order, errors: calc.errors };
