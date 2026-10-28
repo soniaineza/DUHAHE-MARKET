@@ -65,7 +65,7 @@ export default function Dashboard() {
 
   if (!stats) {
     return (
-      <div className="space-y-6 p-6 lg:p-8">
+      <div className="space-y-6 p-4 sm:p-6 lg:p-8">
         <div className="h-5 w-44 animate-pulse rounded-md bg-line" />
         <div className="panel grid grid-cols-2 md:grid-cols-4 md:divide-x md:divide-line">
           {[0, 1, 2, 3].map((i) => (
@@ -87,7 +87,7 @@ export default function Dashboard() {
   const topRevenue = stats.revenueByCategory.length ? Math.max(...stats.revenueByCategory.map((c) => c.revenue)) : 1;
 
   return (
-    <div className="space-y-6 p-6 lg:p-8">
+    <div className="space-y-6 p-4 sm:p-6 lg:p-8">
       {/* Page header — compact, right-aligned context */}
       <div className="flex items-end justify-between gap-3">
         <div>

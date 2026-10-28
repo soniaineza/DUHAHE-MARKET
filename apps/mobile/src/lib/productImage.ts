@@ -1,6 +1,14 @@
 import type { CategoryId, Product } from '@duhahe/shared';
-const photo = (id: string) =>
-  `https://images.unsplash.com/${id}?auto=format&fit=crop&w=720&q=80`;
+const photo = (id: string) => `https://images.unsplash.com/${id}`;
+
+/**
+ * Size the CDN image to where it is shown. Cards need ~400px (retina), the
+ * product page ~900px, cart thumbnails ~160px; serving 720px everywhere made
+ * grids slow to fill in. `auto=format` lets the CDN return WebP/AVIF.
+ */
+export function sized(url: string, width: number, quality = 70): string {
+  return `${url}?auto=format&fit=crop&w=${width}&q=${quality}`;
+}
 
 export const categoryPhoto: Record<CategoryId, string> = {
   staples: photo('photo-1515003197210-e0cd71810b5f'),
@@ -14,7 +22,7 @@ export const categoryPhoto: Record<CategoryId, string> = {
 };
 
 export const productPhoto: Record<string, string> = {
-  s001: photo('photo-1597958792579-bd3517df6399'), // local rice
+  s001: photo('photo-1586201375761-83865001e31c'), // local rice
   s002: photo('photo-1645331465778-eb409d112198'), // imported rice
   s004: photo('photo-1613728913293-c99bb00ef39c'), // maize flour
   s005: photo('photo-1673877792724-4ca45923fee4'), // corn meal (akawunga)
@@ -189,10 +197,10 @@ export const productPhoto: Record<string, string> = {
   o008: photo('photo-1692536631218-ce4264088abe'), // flip flops
 };
 
-export function productPhotoUrl(p: Product): string {
-  return productPhoto[p.id] ?? categoryPhoto[p.category];
+export function productPhotoUrl(p: Product, width = 400): string {
+  return sized(productPhoto[p.id] ?? categoryPhoto[p.category], width);
 }
 
-export function categoryPhotoUrl(c: CategoryId): string {
-  return categoryPhoto[c];
+export function categoryPhotoUrl(c: CategoryId, width = 480): string {
+  return sized(categoryPhoto[c], width);
 }

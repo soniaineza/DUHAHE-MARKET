@@ -9,7 +9,7 @@ export default function CategoryImage({ category, style }: { category: CategoryI
 
   return (
     <View style={styles.wrap}>
-      {!failed && <Image source={{ uri: categoryPhotoUrl(category) }} style={[styles.image, style]} resizeMode="cover" onError={() => setFailed(true)} />}
+      {!failed && <Image source={{ uri: categoryPhotoUrl(category, 240) }} style={[styles.image, style]} resizeMode="cover" onError={() => setFailed(true)} />}
     </View>
   );
 }

@@ -85,7 +85,7 @@ export default function CartScreen() {
               const unit = unitLabel[p.unit]?.[lang] ?? p.unit;
               return (
                 <View key={p.id} style={styles.line}>
-                  <ProductImage product={p} style={styles.emojiWrap} />
+                  <ProductImage product={p} style={styles.emojiWrap} width={200} />
                   <View style={styles.lineBody}>
                     <View style={styles.lineTop}>
                       <Text style={styles.lineName} numberOfLines={1}>{p.name[lang]}</Text>
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
   lineName: { fontSize: fontSizes.md, fontWeight: '700', color: colors.ink, flex: 1 },
   lineUnit: { fontSize: fontSizes.xs, color: colors.faint, marginTop: 2 },
   lineBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
-  lineTotal: { fontSize: fontSizes.md, fontWeight: '800', color: colors.ink },
+  lineTotal: { fontSize: fontSizes.md, fontWeight: '800', color: colors.ink, flexShrink: 0, marginLeft: 8 },
   footer: {
     padding: 16,
     borderTopWidth: 1,
@@ -184,11 +184,11 @@ const styles = StyleSheet.create({
     maxWidth: 900,
     alignSelf: 'center',
   },
-  summary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  summary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   summaryRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   footerLabel: { fontSize: fontSizes.md, fontWeight: '700', color: colors.ink },
   footerTotal: { fontSize: fontSizes.xl, fontWeight: '900', color: colors.ink },
-  footerNote: { fontSize: fontSizes.xs, color: colors.faint },
+  footerNote: { fontSize: fontSizes.xs, color: colors.faint, flexShrink: 1, textAlign: 'right' },
   checkoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',

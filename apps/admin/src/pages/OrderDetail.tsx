@@ -71,7 +71,7 @@ export default function OrderDetail() {
   if (error && !order) return <div className="p-8 text-red-600">{t('failedOrder')}: {error}</div>;
   if (!order) {
     return (
-      <div className="p-8 space-y-4 max-w-3xl">
+      <div className="p-4 sm:p-8 space-y-4 max-w-3xl">
         <div className="h-8 w-48 rounded-lg bg-leaf-50 animate-pulse" />
         <div className="card h-64 animate-pulse" />
       </div>
@@ -89,7 +89,7 @@ export default function OrderDetail() {
   const st = order.status;
 
   return (
-    <div className="p-8 max-w-3xl space-y-6">
+    <div className="p-4 sm:p-8 max-w-3xl space-y-6">
       <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-semibold text-muted hover:text-leaf-700 transition">
         <ArrowLeftIcon size={16} /> {t('backOrders')}
       </button>

@@ -1,7 +1,7 @@
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useState } from 'react';
 import { useFonts } from 'expo-font';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -18,7 +18,17 @@ import { CartProvider } from './src/context/CartContext';
 import { FavoritesProvider } from './src/context/FavoritesContext';
 import { ToastProvider } from './src/components/Toast';
 import { colors } from './src/theme';
+import { FRAME_MAX_WIDTH } from './src/hooks/useResponsive';
 import './src/i18n';
+
+// Open the connection to the image CDN while the bundle is still booting.
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  const link = document.createElement('link');
+  link.rel = 'preconnect';
+  link.href = 'https://images.unsplash.com';
+  link.crossOrigin = 'anonymous';
+  document.head.appendChild(link);
+}
 
 const theme = {
   ...DefaultTheme,
@@ -33,8 +43,8 @@ const theme = {
 };
 
 const styles = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: colors.chip },
-  frame: { flex: 1, width: '100%', maxWidth: 1280, alignSelf: 'center', backgroundColor: colors.bg },
+  shell: { flex: 1, backgroundColor: colors.bg },
+  frame: { flex: 1, width: '100%', maxWidth: FRAME_MAX_WIDTH, alignSelf: 'center', backgroundColor: colors.bg },
   boot: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
   bootErrorText: { color: colors.muted, marginTop: 14, fontSize: 14, textAlign: 'center', paddingHorizontal: 32 },
   retryBtn: { marginTop: 18, backgroundColor: colors.primary, borderRadius: 999, paddingHorizontal: 28, paddingVertical: 10 },

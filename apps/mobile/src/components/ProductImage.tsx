@@ -9,8 +9,10 @@ interface Props {
   style?: StyleProp<ViewStyle>;
   imageStyle?: StyleProp<ImageStyle>;
   resizeMode?: 'cover' | 'contain';
+  /** Pixel width to request from the image CDN (default suits grid cards). */
+  width?: number;
 }
-export default function ProductImage({ product, style, imageStyle, resizeMode = 'cover' }: Props) {
+export default function ProductImage({ product, style, imageStyle, resizeMode = 'cover', width = 400 }: Props) {
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -28,7 +30,7 @@ export default function ProductImage({ product, style, imageStyle, resizeMode = 
     <View style={[styles.wrap, style]}>
       {state !== 'error' && (
         <Image
-          source={{ uri: productPhotoUrl(product) }}
+          source={{ uri: productPhotoUrl(product, width) }}
           style={[styles.image, imageStyle]}
           resizeMode={resizeMode}
           onLoad={fadeIn}

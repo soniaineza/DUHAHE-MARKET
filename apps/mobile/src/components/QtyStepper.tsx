@@ -71,5 +71,6 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.35 },
   pressed: { opacity: 0.7 },
   btnText: { color: colors.accentDeep, fontSize: 18, fontWeight: '700' },
-  qty: { minWidth: 34, textAlign: 'center', fontWeight: '700', color: colors.ink, fontSize: 15 },
+  // A fixed width: on the web a bare <input> keeps its ~170px default width and shoves the price out of the card.
+  qty: { width: 44, padding: 0, textAlign: 'center', fontWeight: '700', color: colors.ink, fontSize: 15 },
 });

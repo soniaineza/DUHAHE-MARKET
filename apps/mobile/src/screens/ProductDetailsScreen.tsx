@@ -102,6 +102,7 @@ export default function ProductDetailsScreen() {
             product={product}
             style={[styles.photo, isDesktop && styles.photoDesktop]}
             resizeMode="cover"
+            width={900}
           />
 
           <View style={[styles.body, isDesktop && styles.bodyDesktop]}>
@@ -159,7 +160,7 @@ export default function ProductDetailsScreen() {
         </View>
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: 20 + insets.bottom }]}>
+      <View style={[styles.footer, isDesktop && styles.footerDesktop, { paddingBottom: 20 + insets.bottom }]}>
         <Pressable
           disabled={oos}
           onPress={addToCart}
@@ -214,6 +215,8 @@ const styles = StyleSheet.create({
   qtyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderColor: colors.divider },
   label: { fontSize: fontSizes.xs, color: colors.faint, marginBottom: 6, fontWeight: '700' },
   lineTotal: { fontSize: fontSizes.lg, fontWeight: '800', color: colors.ink },
+  // Desktop: the action bar blends into the page (cream, no card edge) instead of a white 1200px strip.
+  footerDesktop: { backgroundColor: colors.bg, borderTopWidth: 0 },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 20, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface, width: '100%', maxWidth: 1200, alignSelf: 'center' },
   addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, borderRadius: radii.m, paddingVertical: 15, width: '100%', maxWidth: 560, alignSelf: 'center', ...shadow.sm },
   addBtnPressed: { backgroundColor: colors.primaryDark },

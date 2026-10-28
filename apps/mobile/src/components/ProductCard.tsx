@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { Product } from '@duhahe/shared';
@@ -37,8 +37,6 @@ const unitShort: Record<string, Record<'en' | 'kin' | 'fr', string>> = {
 
 export default function ProductCard({ product, onPress, qtyInCart = 0, wide = false, compact = false, showFavorite = true }: Props) {
   const { lang } = useApp();
-  const { width } = useWindowDimensions();
-  const desktop = width >= 900;
   const cart = useCart();
   const fav = useFavorites();
   const { show } = useToast();
@@ -58,12 +56,12 @@ export default function ProductCard({ product, onPress, qtyInCart = 0, wide = fa
   return (
     <Pressable
       onPress={onPress ?? (() => nav.navigate('ProductDetails', { productId: product.id }))}
-      style={({ pressed }) => [styles.card, wide && styles.cardWide, compact && styles.cardCompact, pressed && styles.pressed]}
+      style={(state) => [styles.card, wide && styles.cardWide, compact && styles.cardCompact, (state as { hovered?: boolean }).hovered && styles.cardHover, state.pressed && styles.pressed]}
     >
       <View style={styles.tile}>
         <ProductImage
           product={product}
-          style={[styles.tileImg, compact && styles.tileImgCompact, wide && styles.tileImgWide, desktop && !wide && !compact && styles.tileImgDesktop]}
+          style={[styles.tileImg, compact && styles.tileImgCompact, wide && styles.tileImgWide]}
           resizeMode="cover"
         />
         {product.organic && (
@@ -122,20 +120,22 @@ export default function ProductCard({ product, onPress, qtyInCart = 0, wide = fa
 
 const styles = StyleSheet.create({
   card: {
+    flex: 1,
     backgroundColor: colors.surface,
     borderRadius: radii.l,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
   },
+  cardHover: { borderColor: colors.primaryLine, shadowColor: '#111111', shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
   cardWide: { width: 168 },
   cardCompact: { borderRadius: radii.m },
   pressed: { opacity: 0.94, transform: [{ scale: 0.985 }] },
   tile: { position: 'relative', backgroundColor: colors.primarySoft },
-  tileImg: { height: 116 },
-  tileImgWide: { height: 124 },
-  tileImgCompact: { height: 92 },
-  tileImgDesktop: { height: 190 },
+  // Fixed ratio (not fixed pixels) so every card in a row has the same image size at any grid width.
+  tileImg: { width: '100%', aspectRatio: 1.25 },
+  tileImgWide: { aspectRatio: undefined, height: 124 },
+  tileImgCompact: { aspectRatio: undefined, height: 92 },
   organic: {
     position: 'absolute',
     top: 8,
@@ -153,9 +153,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
@@ -183,15 +183,16 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   oosTagText: { color: colors.white, fontSize: 9, fontWeight: '800' },
-  info: { padding: 11, paddingBottom: 12 },
+  // Fills the stretched card; the price row is pushed to the bottom so prices line up across a row.
+  info: { flex: 1, padding: 11, paddingBottom: 12 },
   name: { fontSize: fontSizes.sm, fontWeight: '700', color: colors.ink, lineHeight: 18 },
-  sub: { fontSize: fontSizes.xs, color: colors.faint, fontWeight: '600', marginTop: 2 },
-  priceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 7 },
+  sub: { fontSize: fontSizes.xs, color: colors.muted, fontWeight: '600', marginTop: 2 },
+  priceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 8 },
   price: { fontSize: fontSizes.md, fontWeight: '900', color: colors.ink },
   addBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',

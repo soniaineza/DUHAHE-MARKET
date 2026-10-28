@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 import type { Order, OrderStatus } from '@duhahe/shared';
@@ -53,6 +53,14 @@ export default function OrdersScreen() {
       setLoading(false);
     }
   }, [phone]);
+
+  // Signed-in customers already have their phone: show their orders as soon as the tab is opened
+  // (and refresh whenever they come back to it) instead of waiting for a tap on the search button.
+  useFocusEffect(
+    useCallback(() => {
+      void load(true);
+    }, [load])
+  );
 
   const reorder = (o: Order) => {
     cart.clear();

@@ -54,7 +54,7 @@ export default function CategoryScreen() {
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 24 + insets.bottom }]} showsVerticalScrollIndicator={false}>
         <View style={[styles.banner, isDesktop && styles.bannerDesktop]}>
-          <Image source={{ uri: categoryPhotoUrl(category as CategoryId) }} style={styles.bannerImg} resizeMode="cover" />
+          <Image source={{ uri: categoryPhotoUrl(category as CategoryId, 960) }} style={styles.bannerImg} resizeMode="cover" />
           <View style={styles.bannerOverlay} />
           <View style={styles.bannerText}>
             <Text style={styles.bannerName}>{label}</Text>

@@ -61,7 +61,7 @@ export default function Orders() {
   if (error && orders.length === 0) return <div className="p-8 text-red-600">{t('failedOrders')}: {error}</div>;
 
   return (
-    <div className="p-8 space-y-4">
+    <div className="p-4 sm:p-8 space-y-4">
       {error && orders.length > 0 && (
         <div className="rounded-lg bg-red-50 border border-red-100 text-sm text-red-600 px-3 py-2">{error}</div>
       )}
@@ -89,7 +89,7 @@ export default function Orders() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('searchOrders')}
-            className="w-72 rounded-xl border border-line bg-white pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-leaf-500"
+            className="w-full sm:w-72 rounded-xl border border-line bg-white pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-leaf-500"
           />
         </div>
         </div>
@@ -116,7 +116,7 @@ export default function Orders() {
         {filtered.map((o) => (
           <div key={o.id} className="card overflow-hidden">
             <button
-              className="w-full flex items-center justify-between px-5 py-4 hover:bg-leaf-50/50 text-left transition"
+              className="w-full flex flex-wrap items-center justify-between gap-3 px-4 sm:px-5 py-4 hover:bg-leaf-50/50 text-left transition"
               onClick={() => setExpanded(expanded === o.id ? null : o.id)}
             >
               <div className="flex items-center gap-4 min-w-0">

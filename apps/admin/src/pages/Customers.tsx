@@ -27,7 +27,7 @@ export default function Customers() {
   if (error) return <div className="p-8 text-red-600">{error}</div>;
 
   return (
-    <div className="p-8 space-y-4">
+    <div className="p-4 sm:p-8 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-black tracking-tight">{t('customers')}</h1>
@@ -41,7 +41,7 @@ export default function Customers() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('searchCustomers')}
-            className="w-72 rounded-xl border border-line bg-white pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-leaf-500"
+            className="w-full sm:w-72 rounded-xl border border-line bg-white pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-leaf-500"
           />
         </div>
       </div>
