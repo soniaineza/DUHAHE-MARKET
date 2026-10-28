@@ -114,6 +114,8 @@ export const api = {
     orderId: string;
     phone: string;
     amount: number;
+    /** Customer-confirmed early retry ("I cancelled attempt <id> on my phone"); the server re-checks the provider first. */
+    supersedeAttemptId?: string;
   }) => post<PaymentResult>('/payments/create', payload),
 
   /** `attemptId` pins the answer to one payment attempt, so a retry never shows an older attempt's result. */

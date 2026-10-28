@@ -28,7 +28,7 @@ process.env.DEMO_MODE = 'true';
 process.env.PAYMENT_RECHECK_FAILED_MS = '0'; // re-check older failed attempts on every call in tests
 
 const { orders, notifications, updateOrderPaymentStatus } = await import('../data/store');
-const { initiatePayment, syncOrderPayment } = await import('../services/paymentService');
+const { initiatePayment, syncOrderPayment, EARLY_RETRY_MIN_AGE_MS } = await import('../services/paymentService');
 const { paypackWebhookRouter } = await import('../routes/paypack');
 
 // ---------------------------------------------------------------------------------------- fake Paypack
@@ -665,5 +665,174 @@ describe('UPGRADE: orders created BEFORE payment attempts existed (no attempt re
     await syncOrderPayment(o.id);
     await syncOrderPayment(o.id);
     assert.equal(att(o).length, 1);
+  });
+});
+
+// =====================================================================================================
+describe('EARLY RETRY: "I cancelled it on my phone, retry now" (before the provider has answered)', () => {
+  const earlyRetry = (o: Order, attemptId: string) =>
+    initiatePayment({ method: 'mtn_momo', orderId: o.id, phone: o.customer.phone, amount: o.total, supersedeAttemptId: attemptId });
+  /** Make the outstanding request look old enough for an early retry. */
+  const age = (o: Order, ms = EARLY_RETRY_MIN_AGE_MS + 5_000) => {
+    for (const a of att(o)) a.createdAt = new Date(Date.now() - ms).toISOString();
+  };
+
+  it('is refused when the provider has not answered and the request is too recent (no new request is sent)', async () => {
+    const o = makeOrder();
+    await pay(o);
+    const A1 = att(o)[0];
+    const r = await earlyRetry(o, A1.id);
+    assert.equal(r.success, false);
+    assert.equal(att(o).length, 1);
+    assert.equal(A1.supersededAt, undefined);
+    assert.equal(fake.cashinCalls.length, 1);
+  });
+
+  it('after the minimum wait it starts a NEW attempt (own id, key, reference) and keeps A1 tracked, not assumed cancelled', async () => {
+    const o = makeOrder();
+    await pay(o);
+    const A1 = att(o)[0];
+    age(o);
+    const r = await earlyRetry(o, A1.id);
+    assert.equal(r.success, true);
+    assert.equal(att(o).length, 2);
+    const A2 = att(o)[1];
+    assert.notEqual(A2.id, A1.id);
+    assert.notEqual(A2.ref, A1.ref);
+    assert.notEqual(A2.idempotencyKey, A1.idempotencyKey);
+    assert.equal(r.attemptId, A2.id);
+    assert.equal(fake.cashinCalls.length, 2);
+    assert.equal(fake.txs.size, 2);
+    assert.ok(A1.supersededAt, 'A1 is marked as replaced by the customer');
+    assert.equal(A1.status, 'pending', 'but it is NOT assumed cancelled: the provider has not said so');
+    assert.equal(o.paymentStatus, 'unpaid');
+  });
+
+  it('asks the PROVIDER first: if the old request already succeeded, nothing new is sent and the order is paid', async () => {
+    const o = makeOrder();
+    await pay(o);
+    const A1 = att(o)[0];
+    age(o);
+    fake.settle(A1.ref!, 'successful');
+    const r = await earlyRetry(o, A1.id);
+    assert.equal(r.status, 'paid');
+    assert.equal(att(o).length, 1);
+    assert.equal(fake.cashinCalls.length, 1);
+    assert.equal(o.paymentStatus, 'paid');
+    assert.equal(paidNotifications(o), 1);
+  });
+
+  it('asks the PROVIDER first: if the old request is already confirmed failed, it is a normal retry', async () => {
+    const o = makeOrder();
+    await pay(o);
+    const A1 = att(o)[0];
+    fake.settle(A1.ref!, 'failed');
+    const r = await earlyRetry(o, A1.id);
+    assert.equal(r.success, true);
+    assert.equal(att(o).length, 2);
+    assert.equal(A1.status, 'failed');
+    assert.equal(A1.supersededAt, undefined, 'a confirmed failure is not an "early" retry');
+  });
+
+  it('is refused when the provider cannot be reached (cannot rule out that it succeeded)', async () => {
+    const o = makeOrder();
+    await pay(o);
+    age(o);
+    fake.down = true;
+    const r = await earlyRetry(o, att(o)[0].id);
+    assert.equal(r.success, false);
+    assert.equal(att(o).length, 1);
+    assert.equal(fake.cashinCalls.length, 1);
+  });
+
+  it('is limited to ONE early retry per order', async () => {
+    const o = makeOrder();
+    await pay(o);
+    age(o);
+    await earlyRetry(o, att(o)[0].id);
+    age(o);
+    const second = await earlyRetry(o, att(o)[1].id);
+    assert.equal(second.success, false);
+    assert.equal(att(o).length, 2);
+    assert.equal(fake.cashinCalls.length, 2);
+  });
+
+  it('ignores a confirmation about a stale attempt id (starts nothing)', async () => {
+    const o = makeOrder();
+    await pay(o);
+    age(o);
+    const r = await earlyRetry(o, 'pay-not-the-live-attempt');
+    assert.equal(r.success, true);
+    assert.equal(r.attemptId, att(o)[0].id);
+    assert.equal(att(o).length, 1);
+    assert.equal(fake.cashinCalls.length, 1);
+  });
+
+  it('without the confirmation the old strict rule still blocks a second request', async () => {
+    const o = makeOrder();
+    await pay(o);
+    age(o);
+    await pay(o);
+    assert.equal(att(o).length, 1);
+    assert.equal(fake.cashinCalls.length, 1);
+  });
+
+  it('replaced A1 approved first: paid once through A1; A2 approved later is a flagged duplicate', async () => {
+    const o = makeOrder();
+    await pay(o);
+    age(o);
+    await earlyRetry(o, att(o)[0].id);
+    const [A1, A2] = att(o);
+    const first = await webhook(A1.ref!, 'successful', 5000);
+    assert.equal(first.body.effect, 'paid');
+    assert.equal(o.paymentStatus, 'paid');
+    assert.equal(o.providerReference, A1.ref);
+    const second = await webhook(A2.ref!, 'successful', 5000);
+    assert.equal(second.body.effect, 'duplicate_charge');
+    assert.equal(paidNotifications(o), 1);
+    assert.equal(o.paymentIssues?.length, 1);
+    assert.equal(o.paymentIssues![0].attemptId, A2.id);
+  });
+
+  it('A2 approved first: paid once through A2; a later approval of the replaced A1 is a flagged duplicate that says so', async () => {
+    const o = makeOrder();
+    await pay(o);
+    age(o);
+    await earlyRetry(o, att(o)[0].id);
+    const [A1, A2] = att(o);
+    assert.equal((await webhook(A2.ref!, 'successful', 5000)).body.effect, 'paid');
+    const late = await webhook(A1.ref!, 'successful', 5000);
+    assert.equal(late.body.effect, 'duplicate_charge');
+    assert.equal(A1.status, 'duplicate');
+    assert.match(o.paymentIssues![0].note, /replaced this request/);
+    assert.equal(paidNotifications(o), 1);
+    assert.equal(o.paymentStatus, 'paid');
+  });
+
+  it('when the replaced A1 finally fails it changes nothing: A2 stays pending and the order is not marked failed', async () => {
+    const o = makeOrder();
+    await pay(o);
+    age(o);
+    await earlyRetry(o, att(o)[0].id);
+    const [A1, A2] = att(o);
+    fake.settle(A1.ref!, 'failed');
+    const poll = await syncOrderPayment(o.id, A2.id);
+    assert.equal(A1.status, 'failed');
+    assert.equal(A2.status, 'pending');
+    assert.equal(o.paymentStatus, 'unpaid');
+    assert.equal(poll?.status, 'unpaid');
+    assert.equal(poll?.providerStatus, 'pending');
+  });
+
+  it('polling discovers an approved A1 even with no webhook, and tells the page the order is paid', async () => {
+    const o = makeOrder();
+    await pay(o);
+    age(o);
+    await earlyRetry(o, att(o)[0].id);
+    const [A1, A2] = att(o);
+    fake.settle(A1.ref!, 'successful');
+    const poll = await syncOrderPayment(o.id, A2.id);
+    assert.equal(poll?.status, 'paid');
+    assert.equal(o.paymentStatus, 'paid');
   });
 });

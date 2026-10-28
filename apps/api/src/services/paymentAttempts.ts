@@ -185,7 +185,9 @@ export function applyProviderOutcome(order: Order, attempt: PaymentAttempt, outc
       attemptId: attempt.id,
       ref: attempt.ref,
       amount: attempt.amount,
-      note: `Customer was charged ${attempt.amount} RWF by attempt ${attempt.id} after the order was already paid. Refund required. The order is NOT fulfilled again.`,
+      note:
+        `Customer was charged ${attempt.amount} RWF by attempt ${attempt.id} after the order was already paid` +
+        `${attempt.supersededAt ? ' (the customer had replaced this request with a new one)' : ''}. Refund required. The order is NOT fulfilled again.`,
     });
     console.warn(`[payments] DUPLICATE CHARGE order=${order.orderNumber} attempt=${attempt.id} - refund required`);
     saveOrder(order);

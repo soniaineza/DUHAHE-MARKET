@@ -298,7 +298,7 @@ customerRouter.get('/orders/:phone/recent', (req, res) => {
 });
 
 const createPaymentHandler = async (req: Request, res: Response) => {
-  const { method, orderId, phone, amount } = req.body ?? {};
+  const { method, orderId, phone, amount, supersedeAttemptId } = req.body ?? {};
   if (!orderId || !phone || amount === undefined || amount === null || amount === '') {
     res.status(400).json({ error: 'orderId, phone and amount are required' });
     return;
@@ -311,7 +311,13 @@ const createPaymentHandler = async (req: Request, res: Response) => {
   // it exactly equals the order total computed by the server.
   const m = METHODS.includes(method) ? method : 'mtn_momo';
   try {
-    const result = await initiatePayment({ method: m, orderId: String(orderId), phone: String(phone), amount: Number(amount) });
+    const result = await initiatePayment({
+      method: m,
+      orderId: String(orderId),
+      phone: String(phone),
+      amount: Number(amount),
+      supersedeAttemptId: typeof supersedeAttemptId === 'string' && supersedeAttemptId ? supersedeAttemptId : undefined,
+    });
     res.json({ data: result });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Payment failed' });

@@ -79,6 +79,12 @@ export interface PaymentAttempt {
   status: PaymentAttemptStatus;
   createdAt: string;
   settledAt?: string;
+  /**
+   * Set when the customer confirmed they cancelled this request on their phone and asked for a new one
+   * before the provider reported a final answer. The attempt stays open and keeps being reconciled, so if it
+   * is ever approved the money is recorded (and flagged as a duplicate if the order was already paid).
+   */
+  supersededAt?: string;
   /** Amount the provider reported when it differs from `amount`. */
   providerAmount?: number;
 }
@@ -136,6 +142,11 @@ export interface PaymentRequest {
   orderId: string;
   phone: string;
   amount: number;
+  /**
+   * Customer-confirmed early retry: "I cancelled attempt <id> on my phone, send a new request now". The server
+   * still re-checks the provider first and only honours this under strict conditions.
+   */
+  supersedeAttemptId?: string;
 }
 
 export interface PaymentResult {

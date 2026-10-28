@@ -59,3 +59,9 @@ export function pollDelayMs(waitedMs: number): number {
   if (waitedMs < 5 * 60 * 1000) return 5000;
   return 10000;
 }
+
+/**
+ * The "I cancelled it on my phone, retry now" option only appears (and the server only honours it) once a
+ * request has been outstanding this long. Shared so the button and the server rule cannot disagree.
+ */
+export const EARLY_RETRY_AFTER_MS = 60 * 1000;

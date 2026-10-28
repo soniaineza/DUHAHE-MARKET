@@ -1,4 +1,4 @@
-import type { Order, PaymentAttempt, PaymentRequest, PaymentResult } from '@duhahe/shared';
+import { EARLY_RETRY_AFTER_MS, type Order, type PaymentAttempt, type PaymentRequest, type PaymentResult } from '@duhahe/shared';
 import { orders, saveOrder, updateOrderPaymentStatus } from '../data/store';
 import { getTransaction, paypackReady, requestCashin, PaypackUnavailableError } from './paypackService';
 import {
@@ -14,6 +14,9 @@ import {
 } from './paymentAttempts';
 
 export { roundMoney };
+
+/** An early retry is only offered once the first request has been outstanding at least this long. */
+export const EARLY_RETRY_MIN_AGE_MS = EARLY_RETRY_AFTER_MS;
 
 /**
  * Payment gateway layer.
@@ -194,10 +197,10 @@ async function initiatePaymentLocked(req: PaymentRequest): Promise<PaymentResult
     );
   }
 
-  const live = openAttempts(order).find((a) => a.ref);
+  // Requests the customer already replaced stay open (and keep being reconciled) but no longer block a retry.
+  const live = openAttempts(order).find((a) => a.ref && !a.supersededAt);
   if (live) {
-    // The provider still has a request that may be approved: wait for it, never start another.
-    return {
+    const waiting: PaymentResult = {
       success: true,
       providerRequestId: live.ref,
       attemptId: live.id,
@@ -208,6 +211,39 @@ async function initiatePaymentLocked(req: PaymentRequest): Promise<PaymentResult
       },
       status: 'unpaid',
     };
+    // No customer confirmation, or a confirmation about a different attempt than the live one: keep waiting.
+    if (!req.supersedeAttemptId || req.supersedeAttemptId !== live.id) return waiting;
+
+    // ---- Customer says "I cancelled it on my phone": an early retry, under strict conditions. ----
+    // The provider was JUST asked (reconcileOrder above) and still has no final answer for this request, so
+    // success and failure were both ruled out. What remains cannot be proven by the provider before it
+    // answers, so the safeguards below limit and record the risk instead.
+    if (Date.now() - Date.parse(live.createdAt) < EARLY_RETRY_MIN_AGE_MS) {
+      return failure(
+        {
+          en: 'Please wait at least a minute after sending the request before starting a new one.',
+          kin: 'Tegereza nibura umunota umwe nyuma yo kohereza ubusabe mbere yo gutangira ubundi bushya.',
+          fr: 'Veuillez attendre au moins une minute après l’envoi de la demande avant d’en démarrer une nouvelle.',
+        },
+        'unpaid',
+        live.id,
+      );
+    }
+    if ((order.paymentAttempts ?? []).some((a) => a.supersededAt)) {
+      // One early retry per order: after that, wait for the provider like everyone else.
+      return failure(
+        {
+          en: 'A new request was already started for this order. Please wait for the provider to confirm the result.',
+          kin: 'Ubusabe bushya bwamaze gutangira kuri iri tegeko. Tegereza ko bwemezwa.',
+          fr: 'Une nouvelle demande a déjà été lancée pour cette commande. Attendez la confirmation du fournisseur.',
+        },
+        'unpaid',
+        live.id,
+      );
+    }
+    live.supersededAt = new Date().toISOString();
+    saveOrder(order);
+    console.warn(`[payments] EARLY RETRY order=${order.orderNumber}: customer replaced attempt ${live.id} before the provider answered`);
   }
 
   // An attempt we sent but never heard back about is RE-SENT with its own key (so the provider

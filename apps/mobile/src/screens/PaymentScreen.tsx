@@ -6,7 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { decidePhase, pollDelayMs, type PaymentMethod, type PaymentPhase, type PaymentSyncResponse } from '@duhahe/shared';
+import { decidePhase, EARLY_RETRY_AFTER_MS, pollDelayMs, type PaymentMethod, type PaymentPhase, type PaymentSyncResponse } from '@duhahe/shared';
 import { api } from '../api';
 import { useApp } from '../context/AppContext';
 import { fmtRWF } from '../components/Money';
@@ -36,6 +36,9 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
   const [degraded, setDegraded] = useState(false);
   const [slow, setSlow] = useState(false);
   const [checkNote, setCheckNote] = useState(false);
+  const [waitedMs, setWaitedMs] = useState(0);
+  const [confirmingRetry, setConfirmingRetry] = useState(false);
+  const [earlyNote, setEarlyNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const pulse = useRef(new Animated.Value(1)).current;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -80,6 +83,7 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
       const d = decidePhase(res, waited);
       setDegraded(d.degraded);
       setSlow(waited > 45_000);
+      setWaitedMs(waited);
       if (d.phase === 'success') haptic('success');
       if (d.phase === 'cancelled') haptic('error');
       goto(d.phase);
@@ -110,11 +114,15 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
    * Starts (or safely resumes) the payment. The server never sends a second prompt while an earlier
    * one is still pending, so reloading this page or tapping Try again too early is harmless.
    */
-  const processPayment = async () => {
+  const processPayment = async (supersedeAttemptId?: string) => {
     if (busy) return;
     setBusy(true);
     setError(null);
     setCheckNote(false);
+    setEarlyNote(null);
+    setConfirmingRetry(false);
+    const previousAttempt = attemptRef.current;
+    if (supersedeAttemptId) stopPolling();
     goto('sending');
     startedAt.current = Date.now();
     attemptRef.current = undefined;
@@ -125,7 +133,16 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
         orderId: order.id,
         phone: order.customer.phone,
         amount: order.total,
+        supersedeAttemptId,
       });
+      if (!result.success && supersedeAttemptId) {
+        // The server declined the early retry (too soon, already used, provider unreachable...). The old request is
+        // still the one being watched, so go back to waiting on it and say why.
+        attemptRef.current = previousAttempt;
+        setEarlyNote(result.message?.[lang] ?? result.message?.en ?? null);
+        watch();
+        return;
+      }
       if (!result.success) {
         setError(result.message?.[lang] ?? result.message?.en ?? null);
         goto('error');
@@ -233,6 +250,7 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
                   <Text style={styles.waitNote}>{t('payment.waitingHint', { phone: order.customer.phone })}</Text>
                   {slow ? <Text style={styles.waitNote}>{t('payment.waitingSlow')}</Text> : null}
                   {degraded ? <Text style={[styles.waitNote, styles.warnNote]}>{t('payment.degraded')}</Text> : null}
+                  {earlyNote ? <Text style={[styles.waitNote, styles.warnNote]}>{earlyNote}</Text> : null}
                 </>
               ) : null}
             </View>
@@ -306,7 +324,7 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
 
         {(phase === 'cancelled' || phase === 'error') && (
           <View style={styles.actions}>
-            <Pressable onPress={processPayment} disabled={busy} style={({ pressed }) => [styles.primaryBtn, (pressed || busy) && styles.pressed]}>
+            <Pressable onPress={() => processPayment()} disabled={busy} style={({ pressed }) => [styles.primaryBtn, (pressed || busy) && styles.pressed]}>
               <Icon name="refresh" size={18} color="#fff" />
               <Text style={styles.primaryText}>{t('payment.tryAgain')}</Text>
             </Pressable>
@@ -324,6 +342,27 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
             </Pressable>
             <Pressable onPress={trackOrder} style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}>
               <Text style={styles.secondaryText}>{t('success.track')}</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {phase === 'waiting' && waitedMs >= EARLY_RETRY_AFTER_MS && attemptRef.current && !confirmingRetry && (
+          <Pressable onPress={() => setConfirmingRetry(true)} style={({ pressed }) => [styles.outlineBtn, pressed && styles.pressed]}>
+            <Icon name="phone-cancel" size={18} color={colors.ink} />
+            <Text style={styles.outlineText}>{t('payment.earlyRetryButton')}</Text>
+          </Pressable>
+        )}
+
+        {phase === 'waiting' && confirmingRetry && (
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>{t('payment.earlyRetryTitle')}</Text>
+            <Text style={styles.confirmText}>{t('payment.earlyRetryWarn')}</Text>
+            <Pressable onPress={() => processPayment(attemptRef.current)} disabled={busy} style={({ pressed }) => [styles.primaryBtn, (pressed || busy) && styles.pressed]}>
+              <Icon name="refresh" size={18} color="#fff" />
+              <Text style={styles.primaryText}>{t('payment.earlyRetryYes')}</Text>
+            </Pressable>
+            <Pressable onPress={() => setConfirmingRetry(false)} style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}>
+              <Text style={styles.secondaryText}>{t('payment.earlyRetryNo')}</Text>
             </Pressable>
           </View>
         )}
@@ -396,4 +435,9 @@ const styles = StyleSheet.create({
   secondaryBtn: { alignItems: 'center', justifyContent: 'center', paddingVertical: 12 },
   secondaryText: { color: colors.muted, fontWeight: '700', fontSize: fontSizes.sm },
   pressed: { opacity: 0.8 },
+  outlineBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: radii.m, borderWidth: 1.5, borderColor: colors.ink, paddingVertical: 14, paddingHorizontal: 12 },
+  outlineText: { color: colors.ink, fontWeight: '800', fontSize: fontSizes.sm, textAlign: 'center', flexShrink: 1 },
+  confirmCard: { backgroundColor: colors.card, borderRadius: radii.l, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 10 },
+  confirmTitle: { fontSize: fontSizes.md, fontWeight: '900', color: colors.ink },
+  confirmText: { fontSize: fontSizes.sm, color: colors.muted, lineHeight: 19 },
 });
