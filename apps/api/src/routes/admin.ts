@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { OrderStatus } from '@duhahe/shared';
 import { requireAdmin } from '../middleware/auth';
 import { login } from '../services/authService';
+import { ensureLegacyAttempt } from '../services/paymentAttempts';
 import { listOrders, getOrderById } from '../services/orderService';
 import { addProduct, deleteProduct, updateOrderPaymentStatus, updateOrderStatus, updateProduct, products, listCustomers, listAllNotifications, listAddressesFor, listNotificationsFor, pushNotification, addresses, notifications, favoritesByPhone, cartsByPhone } from '../data/store';
 import type { CategoryId, PaymentStatus, Product, Unit } from '@duhahe/shared';
@@ -194,6 +195,7 @@ adminRouter.get('/orders/:id/payment', (req, res) => {
     res.status(404).json({ error: 'Order not found' });
     return;
   }
+  ensureLegacyAttempt(order);
   res.json({
     data: {
       orderId: order.id,
@@ -202,6 +204,15 @@ adminRouter.get('/orders/:id/payment', (req, res) => {
       paymentStatus: order.paymentStatus,
       providerReference: order.providerReference,
       total: order.total,
+      attempts: (order.paymentAttempts ?? []).map((a) => ({
+        id: a.id,
+        ref: a.ref,
+        status: a.status,
+        amount: a.amount,
+        createdAt: a.createdAt,
+        settledAt: a.settledAt,
+      })),
+      issues: order.paymentIssues ?? [],
     },
   });
 });

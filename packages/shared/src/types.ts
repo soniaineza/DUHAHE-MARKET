@@ -56,6 +56,42 @@ export interface Customer {
   address?: string;
 }
 
+/**
+ * One mobile-money request sent to the provider. A retry is ALWAYS a new attempt with its own id,
+ * idempotency key and provider reference, so an event can only ever settle the attempt it belongs to.
+ *  - initiated : created locally, the provider has not (yet) confirmed it exists
+ *  - pending   : provider created it and is waiting for the customer
+ *  - paid      : provider confirmed success for the exact amount and it settled the order
+ *  - failed    : provider confirmed failure (customer cancelled / declined / timed out)
+ *  - duplicate : provider confirmed success but the order was already paid -> customer charged twice
+ *  - mismatch  : provider reported success for the wrong amount; order NOT marked paid
+ */
+export type PaymentAttemptStatus = 'initiated' | 'pending' | 'paid' | 'failed' | 'duplicate' | 'mismatch';
+
+export interface PaymentAttempt {
+  id: string;
+  /** Provider transaction reference; set once the provider has created the request. */
+  ref?: string;
+  /** Sent as the provider Idempotency-Key. Unique per attempt, stable across HTTP re-sends of that attempt. */
+  idempotencyKey: string;
+  amount: number;
+  phone: string;
+  status: PaymentAttemptStatus;
+  createdAt: string;
+  settledAt?: string;
+  /** Amount the provider reported when it differs from `amount`. */
+  providerAmount?: number;
+}
+
+export interface PaymentIssue {
+  at: string;
+  kind: 'duplicate_charge' | 'amount_mismatch';
+  attemptId: string;
+  ref?: string;
+  amount: number;
+  note: string;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -70,6 +106,10 @@ export interface Order {
   paymentStatus: PaymentStatus;
   /** Reference returned by the payment gateway (stub or provider). */
   providerReference?: string;
+  /** Every mobile-money payment attempt for this order, oldest first. Each has its own provider reference. */
+  paymentAttempts?: PaymentAttempt[];
+  /** Payment problems that need a human (e.g. a customer charged twice). Surfaced in the admin. */
+  paymentIssues?: PaymentIssue[];
   createdAt: string;
   note?: string;
   tracking?: { updatedAt: string; note: string }[];
@@ -101,6 +141,8 @@ export interface PaymentRequest {
 export interface PaymentResult {
   success: boolean;
   providerRequestId?: string;
+  /** The payment attempt this result belongs to. */
+  attemptId?: string;
   message: LocalizedText;
   status: PaymentStatus;
 }

@@ -327,7 +327,8 @@ customerRouter.post('/payments/stub', createPaymentHandler);
  */
 customerRouter.get('/payments/status/:orderId', async (req, res) => {
   try {
-    const result = await syncOrderPayment(req.params.orderId);
+    const attemptId = typeof req.query.attempt === 'string' ? req.query.attempt : undefined;
+    const result = await syncOrderPayment(req.params.orderId, attemptId);
     if (!result) {
       res.status(404).json({ error: 'Order not found' });
       return;

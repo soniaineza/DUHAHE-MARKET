@@ -12,7 +12,15 @@ type Token = { access: string; refresh: string; expiresAt: number };
 let cachedToken: Token | null = null;
 let inFlight: Promise<Token> | null = null;
 
-async function request(method: 'GET' | 'POST', path: string, body: unknown, token?: string): Promise<any> {
+/** The provider could not be reached or answered with an error, so the real payment state is unknown. */
+export class PaypackUnavailableError extends Error {
+  constructor(message = 'Paypack is unavailable') {
+    super(message);
+    this.name = 'PaypackUnavailableError';
+  }
+}
+
+async function request(method: 'GET' | 'POST', path: string, body: unknown, token?: string, extraHeaders: Record<string, string> = {}): Promise<any> {
   const res = await fetch(`${config.paypack.baseUrl}${path}`, {
     method,
     headers: {
@@ -20,6 +28,7 @@ async function request(method: 'GET' | 'POST', path: string, body: unknown, toke
       Accept: 'application/json',
       'X-Webhook-Mode': config.paypack.webhookMode,
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...extraHeaders,
     },
     ...(method === 'POST' ? { body: JSON.stringify(body) } : {}),
   });
@@ -32,7 +41,9 @@ async function request(method: 'GET' | 'POST', path: string, body: unknown, toke
   }
   if (!res.ok) {
     const message = data?.message ?? data?.error ?? `Paypack request failed (${res.status})`;
-    throw new Error(typeof message === 'string' ? message : JSON.stringify(message));
+    const err = new Error(typeof message === 'string' ? message : JSON.stringify(message)) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
   return data;
 }
@@ -81,7 +92,7 @@ export function paypackReady(): boolean {
  * local Rwandan format (07XXXXXXXX). Returns the Paypack transaction
  * reference used to match the webhook.
  */
-export async function requestCashin(input: { amount: number; phone: string }): Promise<{ ref: string }> {
+export async function requestCashin(input: { amount: number; phone: string; idempotencyKey?: string }): Promise<{ ref: string }> {
   const token = await accessToken();
   try {
     const data = await request(
@@ -92,6 +103,8 @@ export async function requestCashin(input: { amount: number; phone: string }): P
         number: toLocalPhone(input.phone),
       },
       token,
+      // Same key => Paypack answers with the original transaction instead of charging twice.
+      input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : {},
     );
     return { ref: String(data.ref ?? '') };
   } catch (err) {
@@ -114,6 +127,7 @@ export type PaypackTransaction = {
   status: 'pending' | 'successful' | 'failed';
   amount: number;
   client: string;
+  processedAt?: string;
 };
 
 /** Providers report a handful of spellings; fold them onto our three states. */
@@ -125,64 +139,72 @@ function normalizeStatus(raw: unknown): PaypackTransaction['status'] | null {
   return null;
 }
 
+const RANK: Record<PaypackTransaction['status'], number> = { pending: 0, failed: 1, successful: 2 };
+
+function toTransaction(d: any, ref: string, status: PaypackTransaction['status']): PaypackTransaction {
+  return {
+    ref: String(d?.ref ?? ref),
+    kind: d?.kind === 'CASHOUT' ? 'CASHOUT' : 'CASHIN',
+    status,
+    amount: Number(d?.amount ?? 0),
+    client: String(d?.client ?? ''),
+    processedAt: d?.processed_at ? String(d.processed_at) : undefined,
+  };
+}
+
 /**
- * Look up the live transaction state.
+ * Look up the live state of one transaction.
  *
- * Uses `/transactions/find/{ref}` first (it can return `pending` as soon as the
- * request is created), then falls back to the events feed for older sandbox
- * transactions. Never throws: callers treat `null` as "still unknown".
+ * Paypack documents two read paths and neither is complete on its own:
+ *  - GET /transactions/find/{ref}      (404 for many real transactions, status often absent)
+ *  - GET /events/transactions?ref=...  (`transaction:created` = pending, `transaction:processed` = final)
+ * We ask both and keep the most final answer: successful > failed > pending. A stale `pending`
+ * from one path can therefore never hide a final status reported by the other.
+ *
+ * Returns null when the provider answered but knows nothing about this ref (state unknown), and
+ * throws PaypackUnavailableError when no path could be reached (state unknown, retry later).
  */
 export async function getTransaction(ref: string): Promise<PaypackTransaction | null> {
   if (!ref) return null;
-  const token = await accessToken();
+  let token: string;
+  try {
+    token = await accessToken();
+  } catch (err) {
+    throw new PaypackUnavailableError(err instanceof Error ? err.message : undefined);
+  }
+
+  let best: PaypackTransaction | null = null;
+  let answered = false;
+  const consider = (tx: PaypackTransaction | null) => {
+    if (tx && (!best || RANK[tx.status] > RANK[best.status])) best = tx;
+  };
 
   try {
     const data = await request('GET', `/transactions/find/${encodeURIComponent(ref)}`, {}, token);
+    answered = true;
     const status = normalizeStatus(data?.status);
-    if (status) {
-      return {
-        ref: String(data.ref ?? ref),
-        kind: data.kind === 'CASHOUT' ? 'CASHOUT' : 'CASHIN',
-        status,
-        amount: Number(data.amount ?? 0),
-        client: String(data.client ?? ''),
-      };
-    }
+    if (status) consider(toTransaction(data, ref, status));
   } catch (err) {
-    if (err instanceof Error && /\b401\b|unauthor|token/i.test(err.message)) clearPaypackToken();
+    const status = (err as { status?: number })?.status;
+    if (status === 404) answered = true; // reachable, just no record on this path
+    else if (status === 401) clearPaypackToken();
   }
 
-  // Fallback for transactions that only appear in the events feed.
   try {
     const data = await request('GET', `/events/transactions?ref=${encodeURIComponent(ref)}`, {}, token);
+    answered = true;
     const rows = Array.isArray(data?.transactions) ? data.transactions : [];
-    // Newest event wins: a transaction may be created as `pending` and later
-    // processed as `successful` or `failed`. Paypack returns events newest
-    // first today, but we sort explicitly so a reversed/changed feed cannot
-    // hide a terminal status behind the original `pending` event.
-    const newestFirst = [...rows].sort((a, b) => {
-      const ta = Date.parse(String(a?.created_at ?? a?.data?.processed_at ?? a?.data?.created_at ?? '')) || 0;
-      const tb = Date.parse(String(b?.created_at ?? b?.data?.processed_at ?? b?.data?.created_at ?? '')) || 0;
-      return tb - ta;
-    });
-    for (const row of newestFirst) {
+    for (const row of rows) {
       const d = row?.data ?? row ?? {};
       const status = normalizeStatus(d.status);
-      if (status) {
-        return {
-          ref: String(d.ref ?? ref),
-          kind: d.kind === 'CASHOUT' ? 'CASHOUT' : 'CASHIN',
-          status,
-          amount: Number(d.amount ?? 0),
-          client: String(d.client ?? ''),
-        };
-      }
+      if (status) consider(toTransaction(d, ref, status));
     }
   } catch (err) {
-    if (err instanceof Error && /\b401\b|unauthor|token/i.test(err.message)) clearPaypackToken();
+    if ((err as { status?: number })?.status === 401) clearPaypackToken();
   }
 
-  return null;
+  if (!answered) throw new PaypackUnavailableError();
+  return best;
 }
 
 /**

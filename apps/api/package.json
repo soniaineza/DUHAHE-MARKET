@@ -9,7 +9,8 @@
     "start": "node dist/server.cjs",
     "build": "esbuild src/server.ts --bundle --platform=node --format=cjs --target=node20 --outfile=dist/server.cjs --log-level=warning",
     "seed": "tsx src/data/seed.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/__tests__/*.test.ts"
   },
   "dependencies": {
     "@duhahe/shared": "*",

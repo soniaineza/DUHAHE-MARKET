@@ -1,5 +1,5 @@
 import Constants from 'expo-constants';
-import type { CategoryId, Language, Order, PaymentResult, PaymentStatus, Product } from '@duhahe/shared';
+import type { CategoryId, Language, Order, PaymentResult, PaymentSyncResponse, Product } from '@duhahe/shared';
 
 const API_PORT = 4000;
 const PRODUCTION_API_URL = 'https://duhahe-market-1.onrender.com/api';
@@ -116,14 +116,11 @@ export const api = {
     amount: number;
   }) => post<PaymentResult>('/payments/create', payload),
 
-  paymentStatus: (orderId: string) =>
-    get<{
-      status: PaymentStatus;
-      providerStatus?: 'pending' | 'successful' | 'failed';
-      providerReference?: string;
-      amount?: number;
-      amountMismatch?: boolean;
-    }>(`/payments/status/${encodeURIComponent(orderId)}`),
+  /** `attemptId` pins the answer to one payment attempt, so a retry never shows an older attempt's result. */
+  paymentStatus: (orderId: string, attemptId?: string) =>
+    get<PaymentSyncResponse>(
+      `/payments/status/${encodeURIComponent(orderId)}${attemptId ? `?attempt=${encodeURIComponent(attemptId)}` : ''}`
+    ),
 };
 
 export interface AuthUser {

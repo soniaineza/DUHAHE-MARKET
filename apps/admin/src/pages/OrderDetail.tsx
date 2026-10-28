@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api, type Order } from '../api';
+import { api, type Order, type OrderPaymentInfo } from '../api';
 import type { OrderStatus } from '@duhahe/shared';
 import { OrderStatusBadge } from '../components/OrderStatusBadge';
 import { ArrowLeftIcon } from '../components/Icons';
@@ -24,7 +24,7 @@ export default function OrderDetail() {
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [payment, setPayment] = useState<{ paymentMethod: string; paymentStatus: string; providerReference?: string; total: number } | null>(null);
+  const [payment, setPayment] = useState<OrderPaymentInfo | null>(null);
 
   const load = useCallback(() => {
     if (!id) return;
@@ -266,6 +266,33 @@ export default function OrderDetail() {
               <dt className="text-faint text-xs font-bold uppercase">{t('providerRef')}</dt>
               <dd className="font-mono text-xs">{payment.providerReference ?? t('noRef')}</dd>
             </div>
+            {payment.issues && payment.issues.length > 0 && (
+              <div className="md:col-span-2 rounded-lg border border-red-200 bg-red-50 p-3 text-red-700 space-y-1">
+                <dt className="text-xs font-black uppercase">{t('paymentIssues', 'Payment needs attention')}</dt>
+                {payment.issues.map((i) => (
+                  <dd key={`${i.attemptId}-${i.kind}`} className="text-sm">
+                    {i.note} <span className="font-mono text-xs">({i.ref ?? i.attemptId})</span>
+                  </dd>
+                ))}
+              </div>
+            )}
+            {payment.attempts && payment.attempts.length > 0 && (
+              <div className="md:col-span-2">
+                <dt className="text-faint text-xs font-bold uppercase mb-1">{t('paymentAttempts', 'Payment attempts')}</dt>
+                <dd>
+                  <ul className="space-y-1">
+                    {payment.attempts.map((a, idx) => (
+                      <li key={a.id} className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="font-bold">#{idx + 1}</span>
+                        <span className="capitalize rounded-full border border-line px-2 py-0.5 font-bold">{a.status}</span>
+                        <span>{fmtRWF(a.amount)}</span>
+                        <span className="font-mono text-faint">{a.ref ?? '—'}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </dd>
+              </div>
+            )}
           </dl>
         ) : (
           <div className="h-10 animate-pulse rounded-lg bg-leaf-50" />

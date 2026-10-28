@@ -2,6 +2,7 @@ import { createApp } from './app';
 import { assertRuntimeConfig, config } from './config';
 import { closeDatabase } from './data/database';
 import { flushStore } from './data/store';
+import { startPaymentReconciler } from './services/paymentService';
 
 async function start() {
   // Fail fast on unsafe production config (default secrets, DEMO_MODE, …)
@@ -9,6 +10,7 @@ async function start() {
   assertRuntimeConfig();
 
   const app = await createApp();
+  startPaymentReconciler(); // re-checks open payment attempts even if no webhook ever arrives
   const server = app.listen(config.port, config.host, () => {
     console.log(`🌿 Duhahe API listening on http://${config.host}:${config.port}`);
     // Never log secrets: the admin password lives only in ADMIN_PASSWORD.

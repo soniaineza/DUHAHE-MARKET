@@ -443,10 +443,18 @@ export function updateOrderStatus(id: string, status: OrderStatus, note?: string
 export function updateOrderPaymentStatus(id: string, status: Order['paymentStatus'], providerReference?: string): Order | undefined {
   const order = orders.find((o) => o.id === id);
   if (!order) return undefined;
+  // Money already confirmed is never walked back by a stale or duplicate "failed"/"unpaid" signal.
+  // (Only an explicit refund may leave `paid`.)
+  if (order.paymentStatus === 'paid' && status !== 'paid' && status !== 'refunded') return order;
   order.paymentStatus = status;
   if (providerReference) order.providerReference = providerReference;
   persistSoon();
   return order;
+}
+
+/** Persist in-place edits to an order (payment attempts / issues) made by the payment service. */
+export function saveOrder(order: Order): void {
+  if (orders.includes(order)) persistSoon();
 }
 
 export function getStatsBase() {

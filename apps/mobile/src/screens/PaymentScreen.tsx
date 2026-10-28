@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import type { PaymentMethod } from '@duhahe/shared';
+import { decidePhase, pollDelayMs, type PaymentMethod, type PaymentPhase, type PaymentSyncResponse } from '@duhahe/shared';
 import { api } from '../api';
+import { useApp } from '../context/AppContext';
 import { fmtRWF } from '../components/Money';
 import Icon, { type IconName } from '../components/Icon';
 import { haptic } from '../components/Toast';
@@ -16,78 +17,108 @@ import { colors, fontSizes, radii, shadow } from '../theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-type Phase = 'sending' | 'waiting' | 'success' | 'error';
-
-const POLL_INTERVAL_MS = 4000;
-const POLL_TIMEOUT_MS = 600000;
-
-const paymentMeta: Record<PaymentMethod, { icon: IconName; tile: readonly [string, string]; note: string }> = {
-  mtn_momo: { icon: 'cellphone', tile: ['#ffcb05', '#f5b800'], note: 'MTN Mobile Money' },
-  airtel_money: { icon: 'cellphone', tile: ['#f43f5e', '#e11d48'], note: 'Airtel Money' },
-  cash_on_delivery: { icon: 'hand-coin', tile: ['#334155', '#475569'], note: 'Cash on Delivery' },
+const paymentMeta: Record<PaymentMethod, { icon: IconName; tile: readonly [string, string]; note: string; short: string }> = {
+  mtn_momo: { icon: 'cellphone', tile: ['#ffcb05', '#f5b800'], note: 'MTN Mobile Money', short: 'MTN MoMo' },
+  airtel_money: { icon: 'cellphone', tile: ['#f43f5e', '#e11d48'], note: 'Airtel Money', short: 'Airtel Money' },
+  cash_on_delivery: { icon: 'hand-coin', tile: ['#334155', '#475569'], note: 'Cash on Delivery', short: 'Cash' },
 };
 
 export default function PaymentScreen({ route }: { route: RouteProp<RootStackParamList, 'Payment'> }) {
   const { t } = useTranslation();
+  const { lang } = useApp();
   const nav = useNavigation<Nav>();
   const { order } = route.params;
 
   const meta = paymentMeta[order.paymentMethod];
-  const [phase, setPhase] = useState<Phase>('sending');
+  const [phase, setPhase] = useState<PaymentPhase>('sending');
   const [reference, setReference] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [degraded, setDegraded] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const [checkNote, setCheckNote] = useState(false);
   const [busy, setBusy] = useState(false);
   const pulse = useRef(new Animated.Value(1)).current;
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const poll = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startedAt = useRef<number>(Date.now());
+  const checking = useRef(false);
+  const alive = useRef(true);
+  const phaseRef = useRef<PaymentPhase>('sending');
+  /** The payment attempt this page is currently watching. Answers about any other attempt are ignored. */
+  const attemptRef = useRef<string | undefined>(undefined);
+
+  const goto = (p: PaymentPhase) => {
+    phaseRef.current = p;
+    setPhase(p);
+  };
 
   const stopPolling = () => {
-    if (poll.current) {
-      clearInterval(poll.current);
-      poll.current = null;
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
     }
   };
 
-  const succeed = () => {
-    stopPolling();
-    setPhase('success');
-    haptic('success');
-  };
-
-  const fail = (message: string) => {
-    stopPolling();
-    setError(message);
-    setPhase('error');
-    haptic('error');
-  };
-
-  const watchConfirmation = () => {
-    setPhase('waiting');
-    startedAt.current = Date.now();
-    stopPolling();
-    poll.current = setInterval(async () => {
+  /** One status check. The backend (which talks to the provider) is the only source of truth. */
+  const checkOnce = useCallback(async (): Promise<boolean> => {
+    if (checking.current || !alive.current) return false;
+    checking.current = true;
+    try {
+      let res: PaymentSyncResponse;
       try {
-        const latest = await api.paymentStatus(order.id);
-        if (latest.providerReference) setReference(latest.providerReference);
-        if (latest.status === 'paid') {
-          succeed();
-        } else if (latest.status === 'failed') {
-          fail(t('payment.cancelled', 'The payment was not completed. You can try again.'));
-        } else if (Date.now() - startedAt.current > POLL_TIMEOUT_MS) {
-          fail(t('payment.notConfirmed', 'We did not receive confirmation yet. Check your orders.'));
-        }
+        res = await api.paymentStatus(order.id, attemptRef.current);
       } catch {
-        // transient network error — keep polling until timeout
+        // Offline / server unreachable: the real state is unknown, so keep waiting - never fail.
+        res = { status: 'unpaid', unavailable: true };
       }
-    }, POLL_INTERVAL_MS);
-  };
+      if (!alive.current) return false;
+      // A late answer for an earlier attempt (e.g. the one that was just cancelled) must never
+      // be shown as the result of the attempt we are watching now.
+      if (res.attemptId && attemptRef.current && res.attemptId !== attemptRef.current) return false;
+      if (res.providerReference) setReference(res.providerReference);
+      const since = res.requestedAt ? Date.parse(res.requestedAt) : NaN;
+      const waited = Date.now() - (Number.isFinite(since) ? since : startedAt.current);
+      const d = decidePhase(res, waited);
+      setDegraded(d.degraded);
+      setSlow(waited > 45_000);
+      if (d.phase === 'success') haptic('success');
+      if (d.phase === 'cancelled') haptic('error');
+      goto(d.phase);
+      if (d.stopPolling) stopPolling();
+      return d.stopPolling;
+    } finally {
+      checking.current = false;
+    }
+  }, [order.id]);
 
+  const schedule = useCallback(() => {
+    stopPolling();
+    const waited = Date.now() - startedAt.current;
+    timer.current = setTimeout(async () => {
+      const finished = await checkOnce();
+      if (!finished && alive.current) schedule();
+    }, pollDelayMs(waited));
+  }, [checkOnce]);
+
+  const watch = useCallback(() => {
+    goto('waiting');
+    setCheckNote(false);
+    schedule();
+    void checkOnce();
+  }, [checkOnce, schedule]);
+
+  /**
+   * Starts (or safely resumes) the payment. The server never sends a second prompt while an earlier
+   * one is still pending, so reloading this page or tapping Try again too early is harmless.
+   */
   const processPayment = async () => {
     if (busy) return;
     setBusy(true);
     setError(null);
-    setPhase('sending');
+    setCheckNote(false);
+    goto('sending');
+    startedAt.current = Date.now();
+    attemptRef.current = undefined;
+    setReference('');
     try {
       const result = await api.createPayment({
         method: order.paymentMethod,
@@ -96,37 +127,53 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
         amount: order.total,
       });
       if (!result.success) {
-        fail(result.message?.en ?? t('payment.failed'));
+        setError(result.message?.[lang] ?? result.message?.en ?? null);
+        goto('error');
+        haptic('error');
         return;
       }
-      setReference(result.providerRequestId ?? '');
+      attemptRef.current = result.attemptId;
+      if (result.providerRequestId) setReference(result.providerRequestId);
       if (result.status === 'paid') {
-        succeed();
+        goto('success');
+        haptic('success');
       } else {
-        // Mobile money is asynchronous: stay on "waiting" until the provider
-        // confirms the customer approved the prompt on their phone.
-        watchConfirmation();
+        // Mobile money is asynchronous: wait for the provider's final answer.
+        watch();
       }
     } catch (e) {
-      fail(e instanceof Error ? e.message : t('payment.failed'));
+      setError(e instanceof Error ? e.message : null);
+      goto('error');
+      haptic('error');
     } finally {
       setBusy(false);
     }
   };
 
-  const later = (fn: () => void, ms: number) => {
-    timers.current.push(setTimeout(fn, ms));
+  const recheck = async () => {
+    setCheckNote(false);
+    const finished = await checkOnce();
+    if (!finished && phaseRef.current === 'unresolved') setCheckNote(true);
   };
 
   useEffect(() => {
+    alive.current = true;
     if (order.paymentMethod === 'cash_on_delivery') {
-      succeed();
-      return;
+      goto('success');
+      return () => {
+        alive.current = false;
+      };
     }
-    later(processPayment, 400);
+    const start = setTimeout(processPayment, 400);
+    // Check immediately when the customer returns from the MoMo prompt / the tab or network comes back.
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && phaseRef.current === 'waiting') void checkOnce();
+    });
     return () => {
-      timers.current.forEach(clearTimeout);
+      alive.current = false;
+      clearTimeout(start);
       stopPolling();
+      sub.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -156,6 +203,7 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
   };
 
   const processing = phase === 'sending' || phase === 'waiting';
+  const waitingTitle = t('payment.waitingTitle', { provider: meta.short });
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -178,10 +226,14 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
 
           {processing && (
             <View style={styles.steps}>
-              <Step icon="send-outline" label={t('payment.stepSending')} active={phase === 'sending' || phase === 'waiting'} spinner={phase === 'sending'} />
-              <Step icon="cellphone-information" label={t('payment.stepWaiting')} active={phase === 'waiting'} spinner={phase === 'waiting'} />
+              <Step icon="send-outline" label={t('payment.stepSending')} active spinner={phase === 'sending'} done={phase === 'waiting'} />
+              <Step icon="cellphone-information" label={phase === 'waiting' ? waitingTitle : t('payment.stepWaiting')} active={phase === 'waiting'} spinner={phase === 'waiting'} />
               {phase === 'waiting' ? (
-                <Text style={styles.waitNote}>{t('payment.confirmPrompt', { phone: order.customer.phone })}</Text>
+                <>
+                  <Text style={styles.waitNote}>{t('payment.waitingHint', { phone: order.customer.phone })}</Text>
+                  {slow ? <Text style={styles.waitNote}>{t('payment.waitingSlow')}</Text> : null}
+                  {degraded ? <Text style={[styles.waitNote, styles.warnNote]}>{t('payment.degraded')}</Text> : null}
+                </>
               ) : null}
             </View>
           )}
@@ -208,6 +260,27 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
             </View>
           )}
 
+          {phase === 'cancelled' && (
+            <View style={styles.result}>
+              <View style={[styles.checkCircle, { backgroundColor: colors.dangerSoft }]}>
+                <Icon name="close-circle" size={34} color={colors.danger} />
+              </View>
+              <Text style={styles.resultTitle}>{t('payment.cancelledTitle')}</Text>
+              <Text style={styles.resultSub}>{t('payment.cancelledSub')}</Text>
+            </View>
+          )}
+
+          {phase === 'unresolved' && (
+            <View style={styles.result}>
+              <View style={[styles.checkCircle, { backgroundColor: colors.accentSoft }]}>
+                <Icon name="help-circle-outline" size={36} color={colors.accentDark} />
+              </View>
+              <Text style={styles.resultTitle}>{t('payment.unresolvedTitle')}</Text>
+              <Text style={styles.resultSub}>{t('payment.unresolvedSub')}</Text>
+              {checkNote ? <Text style={[styles.resultSub, styles.warnNote]}>{t('payment.stillPending')}</Text> : null}
+            </View>
+          )}
+
           {phase === 'error' && (
             <View style={styles.result}>
               <View style={[styles.checkCircle, { backgroundColor: colors.dangerSoft }]}>
@@ -231,12 +304,32 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
           </View>
         )}
 
-        {phase === 'error' && (
+        {(phase === 'cancelled' || phase === 'error') && (
           <View style={styles.actions}>
-            <Pressable onPress={processPayment} style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}>
+            <Pressable onPress={processPayment} disabled={busy} style={({ pressed }) => [styles.primaryBtn, (pressed || busy) && styles.pressed]}>
               <Icon name="refresh" size={18} color="#fff" />
-              <Text style={styles.primaryText}>{t('payment.retry')}</Text>
+              <Text style={styles.primaryText}>{t('payment.tryAgain')}</Text>
             </Pressable>
+            <Pressable onPress={trackOrder} style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}>
+              <Text style={styles.secondaryText}>{t('success.track')}</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {phase === 'unresolved' && (
+          <View style={styles.actions}>
+            <Pressable onPress={recheck} style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}>
+              <Icon name="refresh" size={18} color="#fff" />
+              <Text style={styles.primaryText}>{t('payment.checkAgain')}</Text>
+            </Pressable>
+            <Pressable onPress={trackOrder} style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}>
+              <Text style={styles.secondaryText}>{t('success.track')}</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {phase === 'waiting' && (
+          <View style={styles.actions}>
             <Pressable onPress={trackOrder} style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}>
               <Text style={styles.secondaryText}>{t('success.track')}</Text>
             </Pressable>
@@ -247,11 +340,11 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
   );
 }
 
-function Step({ icon, label, active, spinner }: { icon: IconName; label: string; active: boolean; spinner: boolean }) {
+function Step({ icon, label, active, spinner, done }: { icon: IconName; label: string; active: boolean; spinner: boolean; done?: boolean }) {
   return (
     <View style={[styles.step, active && styles.stepActive]}>
-      {spinner ? <ActivityIndicator size="small" color={colors.primary} /> : <Icon name={icon} size={17} color={active ? colors.primary : colors.faint} />}
-      <Text style={[styles.stepText, active && { color: colors.ink, fontWeight: '700' }]}>{label}</Text>
+      {spinner ? <ActivityIndicator size="small" color={colors.primary} /> : <Icon name={done ? 'check-circle' : icon} size={17} color={active ? colors.primary : colors.faint} />}
+      <Text style={[styles.stepText, active && { color: colors.ink, fontWeight: '700' }]} numberOfLines={3}>{label}</Text>
     </View>
   );
 }
@@ -278,8 +371,9 @@ const styles = StyleSheet.create({
   steps: { gap: 8, marginTop: 16 },
   step: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: radii.m, padding: 11, backgroundColor: colors.chip },
   stepActive: { backgroundColor: colors.primarySoft },
-  stepText: { fontSize: fontSizes.sm, color: colors.faint, fontWeight: '600' },
-  waitNote: { fontSize: fontSizes.xs, color: colors.muted, fontWeight: '600', textAlign: 'center', marginTop: 4 },
+  stepText: { flex: 1, fontSize: fontSizes.sm, color: colors.faint, fontWeight: '600' },
+  waitNote: { fontSize: fontSizes.xs, color: colors.muted, fontWeight: '600', textAlign: 'center', marginTop: 4, lineHeight: 17 },
+  warnNote: { color: colors.accentDark },
   result: { alignItems: 'center', marginTop: 22 },
   checkCircle: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
   checkInner: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center' },

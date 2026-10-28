@@ -1,8 +1,7 @@
-import express, { Router } from 'express';
+import { Router } from 'express';
 import { config } from '../config';
-import { orders, pushNotification, updateOrderPaymentStatus } from '../data/store';
-import { getTransaction, paypackReady, requestCashin, verifySignature } from '../services/paypackService';
-import { roundMoney } from '../services/paymentService';
+import { getTransaction, paypackReady, verifySignature } from '../services/paypackService';
+import { applyProviderOutcome, findByRef } from '../services/paymentAttempts';
 
 /**
  * Paypack webhooks.
@@ -12,36 +11,21 @@ import { roundMoney } from '../services/paymentService';
  *   Mode  : must equal PAYPACK_WEBHOOK_MODE (development | production)
  *   Status: Active
  *
- * Every request carries `x-paypack-signature`, an HMAC-SHA256 of the RAW body
- * keyed with the webhook secret shown on the webhook card.
+ * Every request carries `x-paypack-signature`, an HMAC-SHA256 of the RAW body keyed with the webhook
+ * secret shown on the webhook card.
+ *
+ * An event is matched to a payment ATTEMPT by its provider reference and changes only that attempt
+ * (see services/paymentAttempts.ts). Events for an old attempt can never alter a newer one.
  */
 
 export const paypackWebhookRouter = Router();
 
-function findOrderByRef(ref: string) {
-  return orders.find((o) => o.providerReference === ref);
-}
-
 /**
- * An order is only settled when the reported amount equals the order total the
- * server itself computed at checkout. Returns true when the event amount is
- * present, numeric, and does NOT match — i.e. money moved for the wrong amount.
- * A missing/zero amount means the provider did not report one; the ref match
- * alone is trusted in that case (we requested exactly order.total).
+ * Paypack pings the webhook URL with HEAD before delivering the payload; the ping must answer 2xx or
+ * the payload is never sent (docs: Webhooks). No body arrives on HEAD, so there is nothing to
+ * authenticate - it is a reachability check only.
  */
-function amountMismatch(orderTotal: number, reported: unknown): boolean {
-  const value = Number(reported);
-  if (!Number.isFinite(value) || value <= 0) return false;
-  return roundMoney(value) !== roundMoney(orderTotal);
-}
-
-/**
- * Paypack pings the webhook URL with HEAD before delivering the payload; the
- * ping must answer 2xx or the payload is never sent (docs: Webhooks). No body
- * arrives on HEAD, so there is nothing to authenticate — it is a reachability
- * check only.
- */
-paypackWebhookRouter.head('/paypack', (req, res) => {
+paypackWebhookRouter.head('/paypack', (_req, res) => {
   res.status(200).end();
 });
 
@@ -53,94 +37,71 @@ paypackWebhookRouter.post('/paypack', async (req, res) => {
     return;
   }
 
-  const event = JSON.parse(raw.toString('utf8') || '{}');
+  let event: any;
+  try {
+    event = JSON.parse(raw.toString('utf8') || '{}');
+  } catch {
+    res.status(400).json({ error: 'Invalid JSON' });
+    return;
+  }
   const data = event?.data ?? event;
   const kind: string = data?.kind ?? '';
   const ref = String(data?.ref ?? '');
-  const status = String(data?.status ?? event?.status ?? '');
+  const status = String(data?.status ?? event?.status ?? '').toLowerCase();
 
-  // Ignore non-payment events and anything we cannot match to an order.
+  // Ignore non-payment events and anything we cannot match to an attempt.
   if (!ref || !['CASHIN', 'CASHOUT'].includes(kind) || !status) {
     res.json({ received: true });
     return;
   }
 
-  const order = findOrderByRef(ref);
-  if (!order) {
+  const found = findByRef(ref);
+  if (!found) {
     res.json({ received: true, matched: false });
     return;
   }
-  // Wrong amount of money moved → never mark the order paid; flag it loudly.
-  if (status === 'successful' && amountMismatch(order.total, data?.amount ?? event?.amount)) {
-    console.warn(
-      `[paypack] AMOUNT MISMATCH for ref=${ref} order=${order.orderNumber}: ` +
-        `event reported ${data?.amount ?? event?.amount} RWF but the order total is ${order.total} RWF — not marking paid.`
-    );
-    res.json({ received: true, matched: true, amountMismatch: true, expected: order.total });
-    return;
-  }
-  // Idempotency: Paypack may retry a delivery; never double-apply.
-  if (order.paymentStatus === 'paid' && status === 'successful') {
-    res.json({ received: true, matched: true, duplicate: true });
-    return;
-  }
 
-  const paymentStatus = status === 'successful' ? 'paid' : status === 'failed' ? 'failed' : order.paymentStatus;
-  updateOrderPaymentStatus(order.id, paymentStatus, ref);
+  const outcome =
+    status === 'successful' || status === 'success' ? 'successful' : status === 'failed' ? 'failed' : 'pending';
+  const effect = applyProviderOutcome(found.order, found.attempt, { status: outcome, amount: data?.amount ?? event?.amount });
 
-  if (paymentStatus === 'paid') {
-    pushNotification({
-      phone: order.customer.phone,
-      title: 'Payment received',
-      body: `Payment of ${order.total} RWF for order ${order.orderNumber} was received.`,
-      kind: 'order',
-    });
-  }
-
-  res.json({ received: true, matched: true });
+  res.json({
+    received: true,
+    matched: true,
+    attemptId: found.attempt.id,
+    effect,
+    ...(effect === 'noop' ? { duplicate: true } : {}),
+    ...(effect === 'amount_mismatch' ? { amountMismatch: true, expected: found.order.total } : {}),
+  });
 });
 
 /**
- * Fallback reconciliation: the mobile app polls this after starting a Paypack
- * cashin in case the webhook is delayed or the device went offline.
+ * Manual reconciliation of one provider reference (kept for operators / older clients). Applies the
+ * provider's current answer to the attempt that owns the reference, through the same code path.
  */
 paypackWebhookRouter.post('/paypack/:ref/sync', async (req, res) => {
   if (!paypackReady()) {
     res.status(503).json({ error: 'Paypack is not configured' });
     return;
   }
-  const ref = req.params.ref;
-  const order = findOrderByRef(ref);
-  if (!order) {
-    res.status(404).json({ error: 'Order not found for reference' });
+  const found = findByRef(req.params.ref);
+  if (!found) {
+    res.status(404).json({ error: 'No payment attempt uses this reference' });
     return;
   }
-  const tx = await getTransaction(ref);
+  let tx: Awaited<ReturnType<typeof getTransaction>>;
+  try {
+    tx = await getTransaction(found.attempt.ref!);
+  } catch {
+    res.status(503).json({ error: 'Paypack is unreachable; the payment state is unknown', data: { ref: found.attempt.ref, unavailable: true } });
+    return;
+  }
   if (!tx) {
-    res.json({ data: { ref, status: order.paymentStatus } });
+    res.json({ data: { ref: found.attempt.ref, attemptId: found.attempt.id, attemptStatus: found.attempt.status } });
     return;
   }
-  if (tx.status === 'successful' && order.paymentStatus !== 'paid') {
-    // Same rule as the webhook: paid only if the money matches the order total.
-    if (amountMismatch(order.total, tx.amount)) {
-      console.warn(
-        `[paypack] AMOUNT MISMATCH on sync ref=${ref} order=${order.orderNumber}: ` +
-          `received ${tx.amount} RWF but the order total is ${order.total} RWF — not marking paid.`
-      );
-      res.json({ data: { ref, status: order.paymentStatus, amount: tx.amount, amountMismatch: true, expected: order.total } });
-      return;
-    }
-    updateOrderPaymentStatus(order.id, 'paid', ref);
-    pushNotification({
-      phone: order.customer.phone,
-      title: 'Payment received',
-      body: `Payment of ${order.total} RWF for order ${order.orderNumber} was received.`,
-      kind: 'order',
-    });
-  } else if (tx.status === 'failed' && order.paymentStatus === 'unpaid') {
-    updateOrderPaymentStatus(order.id, 'failed', ref);
-  }
-  res.json({ data: { ref, status: tx.status, amount: tx.amount } });
+  const effect = applyProviderOutcome(found.order, found.attempt, { status: tx.status, amount: tx.amount });
+  res.json({ data: { ref: found.attempt.ref, attemptId: found.attempt.id, attemptStatus: found.attempt.status, effect, status: tx.status } });
 });
 
 /** Tells the frontend where to send users and what the webhook URL is. */

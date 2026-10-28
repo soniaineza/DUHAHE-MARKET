@@ -93,6 +93,8 @@ export interface OrderPaymentInfo {
   paymentStatus: PaymentStatus;
   providerReference?: string;
   total: number;
+  attempts?: { id: string; ref?: string; status: string; amount: number; createdAt: string; settledAt?: string }[];
+  issues?: { at: string; kind: string; attemptId: string; ref?: string; amount: number; note: string }[];
 }
 
 export type ProductPatch = Partial<{
