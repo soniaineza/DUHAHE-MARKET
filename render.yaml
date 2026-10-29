@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     rootDir: .
-    buildCommand: npm install && npm run build -w @duhahe/api
+    buildCommand: npm install && npm run build -w @duhahe/api && echo "Force redeploy trigger"
     startCommand: npm run start -w @duhahe/api
     healthCheckPath: /api/health
     autoDeploy: true
