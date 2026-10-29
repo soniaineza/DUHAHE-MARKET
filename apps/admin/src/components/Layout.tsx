@@ -56,7 +56,7 @@ export default function Layout() {
         <div className="px-5 py-6 border-b border-white/10">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-leaf-50 text-ink">
-              <BasketIcon size={22} />
+              <img src="/logo.jpeg" alt="Duhahe" width={22} height={22} style={{ borderRadius: '50%' }} />
             </div>
             <div>
               <div className="text-lg font-black tracking-tight leading-none">Duhahe</div>
@@ -123,7 +123,7 @@ export default function Layout() {
         <div className="lg:hidden sticky top-0 z-20 bg-leaf-900 text-white flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-leaf-50 text-ink">
-              <BasketIcon size={16} />
+              <img src="/logo.jpeg" alt="Duhahe" width={16} height={16} style={{ borderRadius: '50%' }} />
             </div>
             <span className="text-sm font-bold">Duhahe</span>
           </div>

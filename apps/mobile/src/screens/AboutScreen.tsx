@@ -42,9 +42,12 @@ export default function AboutScreen() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <LinearGradient colors={['#111111', '#000000']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
-          <View style={styles.logoWrap}>
-            <Icon name="basket" size={30} color={colors.accent} />
-          </View>
+<View style={styles.logoWrap}>
+              <Image
+                source={require('../assets/logo.jpeg')}
+                style={[{ width: 58, height: 58, borderRadius: 29, backgroundColor: 'rgba(244,185,66,0.2)', alignItems: 'center', justifyContent: 'center' }, { resizeMode: 'cover' }]}
+              />
+            </View>
           <Text style={styles.brand}>{t('about.brand')}</Text>
           <Text style={styles.tagline}>{t('about.tagline')}</Text>
         </LinearGradient>

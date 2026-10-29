@@ -1,6 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import Icon from './Icon';
+import { StyleSheet, Text, View, Image } from 'react-native';
 import { colors, radii } from '../theme';
 
 interface Props {
@@ -9,20 +7,14 @@ interface Props {
   showWordmark?: boolean;
 }
 
-const sizes = { sm: 34, md: 44, lg: 56 };
-
 export default function LogoMark({ size = 'md', dark = false, showWordmark = true }: Props) {
-  const px = sizes[size];
   return (
-    <View style={styles.row}>
-      <LinearGradient
-        colors={dark ? ['#000000', '#111111'] : ['#111111', '#000000']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.tile, { width: px, height: px, borderRadius: px * 0.28 }]}
-      >
-        <Icon name="basket-fill" size={px * 0.55} color="#ffffff" />
-      </LinearGradient>
+    <View style={styles.container}>
+      <Image
+        source={require('../assets/logo.jpeg')}
+        style={styles.logo}
+        dark={dark}
+      />
       {showWordmark && (
         <View style={styles.wordWrap}>
           <Text style={[styles.word, dark && styles.wordDark]}>Duhahe</Text>
@@ -34,8 +26,8 @@ export default function LogoMark({ size = 'md', dark = false, showWordmark = tru
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  tile: { alignItems: 'center', justifyContent: 'center', shadowColor: '#111111', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 5 },
+  container: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  logo: { width: 58, height: 58, borderRadius: 29, resizeMode: 'cover' },
   wordWrap: {},
   word: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5, color: colors.ink },
   wordDark: { color: colors.white },
