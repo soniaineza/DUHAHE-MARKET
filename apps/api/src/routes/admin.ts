@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { OrderStatus } from '@duhahe/shared';
 import { requireAdmin } from '../middleware/auth';
-import { login } from '../services/authService';
+import { verifyAdminCredentials } from '../services/authService';
 import { ensureLegacyAttempt } from '../services/paymentAttempts';
 import { listOrders, getOrderById } from '../services/orderService';
 import { addProduct, deleteProduct, updateOrderPaymentStatus, updateOrderStatus, updateProduct, products, listCustomers, listAllNotifications, listAddressesFor, listNotificationsFor, pushNotification, addresses, notifications, favoritesByPhone, cartsByPhone } from '../data/store';
@@ -29,7 +29,7 @@ export const adminRouter = Router();
 
 adminRouter.post('/auth/login', (req, res) => {
   const { email, password } = req.body ?? {};
-  const result = login(String(email ?? ''), String(password ?? ''));
+  const result = verifyAdminCredentials(String(email ?? ''), String(password ?? ''));
   if (!result) {
     res.status(401).json({ error: 'Invalid credentials' });
     return;

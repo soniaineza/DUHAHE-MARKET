@@ -45,7 +45,7 @@ export interface CustomerTokenPayload {
   role: 'customer';
 }
 
-export function login(email: string, password: string): { token: string; admin: AdminTokenPayload } | null {
+export function verifyAdminCredentials(email: string, password: string): { token: string; admin: AdminTokenPayload } | null {
   // Both comparisons are constant-time so response timing cannot be used to
   // guess the admin email or password byte by byte.
   if (!safeEqual(email.toLowerCase(), config.admin.email.toLowerCase())) return null;
