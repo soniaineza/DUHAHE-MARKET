@@ -1,4 +1,4 @@
-import { Navigate, RouterProvider, createBrowserRouter } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { getToken } from './api';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -14,25 +14,25 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-const router = createBrowserRouter([
-  {
-    path: '/login',
-    element: <Login />,
-  },
-  {
-    element: <RequireAuth><Layout /></RequireAuth>,
-    children: [
-      { path: '/', element: <Dashboard /> },
-      { path: '/orders', element: <Orders /> },
-      { path: '/orders/:id', element: <OrderDetail /> },
-      { path: '/customers', element: <Customers /> },
-      { path: '/notifications', element: <Notifications /> },
-      { path: '/inventory', element: <Inventory /> },
-    ],
-  },
-  { path: '*', element: <Navigate to="/" replace /> },
-]);
-
 export default function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route
+        element={
+          <RequireAuth>
+            <Layout />
+          </RequireAuth>
+        }
+      >
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/orders" element={<Orders />} />
+        <Route path="/orders/:id" element={<OrderDetail />} />
+        <Route path="/customers" element={<Customers />} />
+        <Route path="/notifications" element={<Notifications />} />
+        <Route path="/inventory" element={<Inventory />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
 }
