@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, setToken, API_BASE } from '../api';
-import { BasketIcon, LeafIcon, TruckIcon, MoneyIcon } from '../components/Icons';
+import { LeafIcon, TruckIcon, MoneyIcon } from '../components/Icons';
 import { useAdminI18n } from '../i18n';
 
 export default function Login() {
@@ -39,8 +39,8 @@ export default function Login() {
     <div className="min-h-screen flex bg-bg">
       <div className="hidden lg:flex w-1/2 flex-col justify-between bg-leaf-900 p-12 text-white">
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
-            <BasketIcon className="text-white" size={26} />
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-1">
+            <img src="/logo-mark.png" alt="Duhahe Rwanda Market" className="h-full w-full object-contain" />
           </div>
           <div>
               <div className="text-2xl font-black tracking-tight leading-none">Duhahe Rwanda Market</div>
@@ -78,8 +78,8 @@ export default function Login() {
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">
           <div className="lg:hidden flex items-center gap-3 mb-8">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-leaf-900">
-              <BasketIcon className="text-white" size={24} />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white border border-black/10 p-1">
+              <img src="/logo-mark.png" alt="Duhahe Rwanda Market" className="h-full w-full object-contain" />
             </div>
             <div className="text-2xl font-black tracking-tight">
               Duhahe Rwanda <span className="text-harvest-500">Market</span>

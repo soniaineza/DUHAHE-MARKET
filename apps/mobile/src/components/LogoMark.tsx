@@ -11,9 +11,8 @@ export default function LogoMark({ size = 'md', dark = false, showWordmark = tru
   return (
     <View style={styles.container}>
       <Image
-        source={require('../assets/logo.jpeg')}
+        source={require('../../assets/logo-mark.png')}
         style={styles.logo}
-        dark={dark}
       />
       {showWordmark && (
         <View style={styles.wordWrap}>
@@ -27,7 +26,7 @@ export default function LogoMark({ size = 'md', dark = false, showWordmark = tru
 
 const styles = StyleSheet.create({
   container: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  logo: { width: 58, height: 58, borderRadius: 29, resizeMode: 'cover' },
+  logo: { width: 58, height: 58, borderRadius: 10, resizeMode: 'contain', backgroundColor: '#fff' },
   wordWrap: {},
   word: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5, color: colors.ink },
   wordDark: { color: colors.white },

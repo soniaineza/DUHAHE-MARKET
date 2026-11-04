@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -25,7 +25,7 @@ export default function AboutScreen() {
   const contacts: { icon: IconName; label: string; value: string }[] = [
     { icon: 'phone-outline', label: t('about.callUs'), value: '+250 799 654 373' },
     { icon: 'whatsapp', label: t('about.whatsappUs'), value: '+250 799 654 373' },
-    { icon: 'email-outline', label: t('about.emailUs'), value: 'duhaherwanda@gmail.com' },
+    { icon: 'email-outline', label: t('about.emailUs'), value: 'duhaherwandamarket@gmail.com' },
     { icon: 'map-marker-outline', label: t('about.address'), value: t('about.addressLine') },
     { icon: 'clock-outline', label: t('about.hours'), value: t('about.hoursValue') },
   ];
@@ -44,8 +44,8 @@ export default function AboutScreen() {
         <LinearGradient colors={['#111111', '#000000']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
 <View style={styles.logoWrap}>
               <Image
-                source={require('../assets/logo.jpeg')}
-                style={[{ width: 58, height: 58, borderRadius: 29, backgroundColor: 'rgba(244,185,66,0.2)', alignItems: 'center', justifyContent: 'center' }, { resizeMode: 'cover' }]}
+                source={require('../../assets/logo-mark.png')}
+                style={{ width: 96, height: 96, borderRadius: 16, backgroundColor: '#fff', resizeMode: 'contain' }}
               />
             </View>
           <Text style={styles.brand}>{t('about.brand')}</Text>
@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
   },
-  logoWrap: { width: 58, height: 58, borderRadius: 29, backgroundColor: 'rgba(244,185,66,0.2)', alignItems: 'center', justifyContent: 'center' },
+  logoWrap: { width: 96, height: 96, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   brand: { fontSize: fontSizes.xl, fontWeight: '900', color: '#fff', fontFamily: fonts.black, marginTop: 12, textAlign: 'center' },
   tagline: { fontSize: fontSizes.sm, color: '#cfe9dd', marginTop: 6, textAlign: 'center', lineHeight: 19 },
   card: { backgroundColor: colors.card, borderRadius: radii.l, borderWidth: 1, borderColor: colors.border, padding: 16 },
