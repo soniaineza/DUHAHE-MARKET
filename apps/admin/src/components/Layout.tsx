@@ -55,8 +55,8 @@ export default function Layout() {
       <aside className={`${mobileOpen ? 'fixed inset-y-0 left-0 z-40 flex' : 'hidden'} lg:flex lg:sticky lg:top-0 h-screen w-64 shrink-0 bg-leaf-900 text-white flex-col`}>
         <div className="px-5 py-6 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-leaf-50 text-ink">
-              <img src="/logo-mark.png" alt="Duhahe" width={36} height={36} style={{ borderRadius: 8 }} />
+            <div className="flex h-11 w-20 items-center justify-center rounded-xl bg-white px-1.5">
+              <img src="/logo-emblem.png" alt="Duhahe" className="w-full h-full object-contain" />
             </div>
             <div>
               <div className="text-lg font-black tracking-tight leading-none">Duhahe</div>
@@ -122,8 +122,8 @@ export default function Layout() {
       <main className="flex-1 min-w-0">
         <div className="lg:hidden sticky top-0 z-20 bg-leaf-900 text-white flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-leaf-50 text-ink">
-              <img src="/logo-mark.png" alt="Duhahe" width={28} height={28} style={{ borderRadius: 6 }} />
+            <div className="flex h-9 w-16 items-center justify-center rounded-lg bg-white px-1">
+              <img src="/logo-emblem.png" alt="Duhahe" className="w-full h-full object-contain" />
             </div>
             <span className="text-sm font-bold">Duhahe</span>
           </div>

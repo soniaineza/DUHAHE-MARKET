@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -52,9 +52,7 @@ export default function HomeScreen() {
         {!isDesktop && (
         <>
         <View style={styles.header}>
-          <View style={styles.locPin}>
-            <Icon name="map-marker" size={18} color={colors.white} />
-          </View>
+          <Image source={require('../../assets/logo-emblem.png')} style={styles.locPin} resizeMode="contain" accessibilityLabel="Duhahe Rwanda Market" />
           <View style={styles.brandCol}>
             <Pressable onPress={() => { haptic('light'); nav.navigate('About'); }} hitSlop={6}>
               <Text style={styles.locCity} numberOfLines={2}>{t('about.brand')}</Text>
@@ -152,7 +150,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8, minHeight: 44 },
   brandCol: { flexShrink: 1, minWidth: 0 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 'auto' },
-  locPin: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  locPin: { width: 68, height: 36 },
   locCity: { fontSize: fontSizes.md + 1, lineHeight: 20, fontWeight: '800', color: colors.ink, fontFamily: fonts.bold, letterSpacing: -0.3 },
   locSubRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 1 },
   locSub: { fontSize: fontSizes.xs, color: colors.muted, fontWeight: '500' },

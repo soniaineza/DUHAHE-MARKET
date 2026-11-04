@@ -39,8 +39,8 @@ export default function Login() {
     <div className="min-h-screen flex bg-bg">
       <div className="hidden lg:flex w-1/2 flex-col justify-between bg-leaf-900 p-12 text-white">
         <div className="flex items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-1">
-            <img src="/logo-mark.png" alt="Duhahe Rwanda Market" className="h-full w-full object-contain" />
+          <div className="flex h-14 w-28 items-center justify-center rounded-2xl bg-white p-1.5">
+            <img src="/logo-emblem.png" alt="Duhahe Rwanda Market" className="h-full w-full object-contain" />
           </div>
           <div>
               <div className="text-2xl font-black tracking-tight leading-none">Duhahe Rwanda Market</div>
@@ -78,8 +78,8 @@ export default function Login() {
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">
           <div className="lg:hidden flex items-center gap-3 mb-8">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white border border-black/10 p-1">
-              <img src="/logo-mark.png" alt="Duhahe Rwanda Market" className="h-full w-full object-contain" />
+            <div className="flex h-12 w-24 items-center justify-center rounded-xl bg-white border border-black/10 p-1">
+              <img src="/logo-emblem.png" alt="Duhahe Rwanda Market" className="h-full w-full object-contain" />
             </div>
             <div className="text-2xl font-black tracking-tight">
               Duhahe Rwanda <span className="text-harvest-500">Market</span>

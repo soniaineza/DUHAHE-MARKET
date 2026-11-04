@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import Icon, { type IconName } from './Icon';
 import { useCart } from '../context/CartContext';
@@ -41,9 +41,7 @@ export default function DesktopHeader({ active, go, open }: Props) {
     <View style={styles.bar}>
       <View style={styles.inner}>
         <Pressable onPress={() => go('Home')} style={styles.brand} accessibilityRole="link" accessibilityLabel={t('about.brand')}>
-          <View style={styles.pin}>
-            <Icon name="map-marker" size={18} color={colors.white} />
-          </View>
+          <Image source={require('../../assets/logo-emblem.png')} style={styles.pin} resizeMode="contain" accessibilityLabel="Duhahe Rwanda Market" />
           <View style={styles.brandText}>
             <Text style={styles.brandName} numberOfLines={1}>{wide ? t('about.brand') : 'Duhahe'}</Text>
             {wide ? (
@@ -131,7 +129,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 0 },
-  pin: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  pin: { width: 84, height: 44 },
   brandText: { justifyContent: 'center' },
   brandName: { fontSize: fontSizes.md + 1, lineHeight: 20, fontWeight: '800', color: colors.ink, fontFamily: fonts.bold, letterSpacing: -0.3 },
   deliverRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 1 },
