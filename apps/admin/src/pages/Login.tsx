@@ -1,17 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, setToken, API_BASE } from '../api';
+import { api, setToken, getToken, API_BASE } from '../api';
 import { LeafIcon, TruckIcon, MoneyIcon } from '../components/Icons';
 import { useAdminI18n } from '../i18n';
 
 export default function Login() {
   const { lang, setLang, t } = useAdminI18n();
-  const [email, setEmail] = useState('admin@duhahe.rw');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [productCount, setProductCount] = useState<number | null>(null);
   const navigate = useNavigate();
+
+  // Already signed in? Skip the login page. Also re-check on bfcache restore.
+  useEffect(() => {
+    if (getToken()) navigate('/', { replace: true });
+    const onShow = (e: PageTransitionEvent) => { if (e.persisted && getToken()) navigate('/', { replace: true }); };
+    window.addEventListener('pageshow', onShow);
+    return () => window.removeEventListener('pageshow', onShow);
+  }, [navigate]);
 
   useEffect(() => {
     fetch(`${API_BASE}/products?lang=en`)
@@ -27,7 +35,7 @@ export default function Login() {
     try {
       const res = await api.login(email, password);
       setToken(res.data.token);
-      navigate('/');
+      navigate('/', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -96,7 +104,7 @@ export default function Login() {
               <div>
                 <label className="block text-xs font-bold text-soft mb-1.5 uppercase tracking-wide">{t('email')}</label>
                 <input
-                  type="email"
+                  type="email" autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-leaf-500"
@@ -105,7 +113,7 @@ export default function Login() {
               <div>
                 <label className="block text-xs font-bold text-soft mb-1.5 uppercase tracking-wide">{t('password')}</label>
                 <input
-                  type="password"
+                  type="password" autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-leaf-500"

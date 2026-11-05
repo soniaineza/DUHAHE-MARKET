@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { api, clearToken, type AdminProfile } from '../api';
+import { api, logout, type AdminProfile } from '../api';
 import { GridIcon, CartIcon, TagIcon, UsersIcon, BellIcon, LogoutIcon } from './Icons';
 import { useAdminI18n } from '../i18n';
 
@@ -45,8 +45,8 @@ export default function Layout() {
   }, [navigate]);
 
   const signOut = () => {
-    clearToken();
-    navigate('/login');
+    void logout();
+    navigate('/login', { replace: true });
   };
 
   return (

@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 import { normalizeProvince, provinceOfDistrict, type PaymentMethod } from '@duhahe/shared';
 import { calculateOrder, createOrderFromInput, listOrders } from '../services/orderService';
 import { initiatePayment, syncOrderPayment } from '../services/paymentService';
-import { signCustomerToken, verifyCustomerToken, hashPassword, verifyPassword } from '../services/authService';
+import { signCustomerToken, verifyCustomerToken, revokeToken, hashPassword, verifyPassword } from '../services/authService';
 import {
   addAddress,
   consumeOtp,
@@ -112,6 +112,12 @@ customerRouter.post('/auth/verify', (req, res) => {
   );
   const token = signCustomerToken(user);
   res.json({ data: { token, user: publicUser(user) } });
+});
+
+customerRouter.post('/auth/logout', (req, res) => {
+  const header = req.headers.authorization ?? '';
+  revokeToken(header.startsWith('Bearer ') ? header.slice(7) : '');
+  res.json({ data: { ok: true } });
 });
 
 customerRouter.get('/auth/me', (req, res) => {

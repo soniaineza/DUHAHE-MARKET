@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BASE_URL } from '../api';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { Language } from '@duhahe/shared';
 import { setLanguage } from '../i18n';
@@ -96,6 +97,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ]).catch(() => {});
       },
       signOut: () => {
+        // Revoke the token on the server (best effort) before discarding it.
+        if (token) fetch(`${BASE_URL}/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
         setToken(null);
         setUser(null);
         setProfileState(null);

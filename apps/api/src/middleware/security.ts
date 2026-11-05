@@ -9,7 +9,15 @@ import { config } from '../config';
  *  - HSTS in production (Render serves HTTPS);
  *  - X-Powered-By disabled (app.disable in app.ts) — reveals the stack.
  */
-export function securityHeaders(_req: Request, res: Response, next: NextFunction): void {
+export function securityHeaders(req: Request, res: Response, next: NextFunction): void {
+  // Authenticated/auth responses must never be stored by browsers or proxies,
+  // so Back/forward cannot resurrect another session's data.
+  if (req.path.startsWith('/api/admin') || req.path.startsWith('/api/auth')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+  }
+  res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');

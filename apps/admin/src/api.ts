@@ -6,16 +6,32 @@ const BASE = (env.VITE_API_URL as string) || PRODUCTION_API_URL;
 export const API_BASE = BASE;
 const TOKEN_KEY = 'duhahe_admin_token';
 
+// sessionStorage (not localStorage): the session dies when the tab/browser is
+// closed and is never shared with other tabs.
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; }
 }
 
 export function setToken(token: string) {
-  localStorage.setItem(TOKEN_KEY, token);
+  try { sessionStorage.setItem(TOKEN_KEY, token); } catch { /* ignore */ }
+  try { localStorage.removeItem(TOKEN_KEY); } catch { /* legacy cleanup */ }
 }
 
 export function clearToken() {
-  localStorage.removeItem(TOKEN_KEY);
+  try { sessionStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+  try { localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+}
+
+/** Revoke the token server-side (best effort), wipe it locally and notify the UI. */
+export async function logout(): Promise<void> {
+  const token = getToken();
+  clearToken();
+  if (token) {
+    try {
+      await fetch(`${BASE}/admin/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, cache: 'no-store', keepalive: true });
+    } catch { /* offline: token is already gone locally and expires in 2h */ }
+  }
+  window.dispatchEvent(new Event('auth:logout'));
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -26,7 +42,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  const res = await fetch(`${BASE}${path}`, { ...options, headers, cache: 'no-store' });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     if (res.status === 401) { clearToken(); window.dispatchEvent(new Event('auth:logout')); }

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { OrderStatus } from '@duhahe/shared';
-import { requireAdmin } from '../middleware/auth';
-import { verifyAdminCredentials } from '../services/authService';
+import { bearerToken, requireAdmin } from '../middleware/auth';
+import { revokeToken, verifyAdminCredentials } from '../services/authService';
 import { ensureLegacyAttempt } from '../services/paymentAttempts';
 import { listOrders, getOrderById } from '../services/orderService';
 import { addProduct, deleteProduct, updateOrderPaymentStatus, updateOrderStatus, updateProduct, products, listCustomers, listAllNotifications, listAddressesFor, listNotificationsFor, pushNotification, addresses, notifications, favoritesByPhone, cartsByPhone } from '../data/store';
@@ -38,6 +38,11 @@ adminRouter.post('/auth/login', (req, res) => {
 });
 
 adminRouter.use(requireAdmin);
+
+adminRouter.post('/auth/logout', (req, res) => {
+  revokeToken(bearerToken(req));
+  res.json({ data: { ok: true } });
+});
 
 adminRouter.get('/me', (req, res) => {
   res.json({ data: req.admin });

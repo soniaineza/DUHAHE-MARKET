@@ -10,6 +10,11 @@ declare global {
   }
 }
 
+export function bearerToken(req: Request): string {
+  const header = req.headers.authorization ?? '';
+  return header.startsWith('Bearer ') ? header.slice(7) : '';
+}
+
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';

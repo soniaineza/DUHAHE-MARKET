@@ -45,6 +45,29 @@ export interface CustomerTokenPayload {
   role: 'customer';
 }
 
+const JWT_ISSUER = 'duhahe-api';
+const VERIFY_OPTS: jwt.VerifyOptions = { algorithms: ['HS256'], issuer: JWT_ISSUER };
+/** Admin sessions are short-lived; the admin UI also signs out after inactivity. */
+const ADMIN_TOKEN_TTL = '2h';
+
+/**
+ * Server-side revocation list (token id -> expiry ms). Logging out revokes the
+ * token so a copied/cached token cannot be replayed afterwards.
+ */
+const revoked = new Map<string, number>();
+
+export function revokeToken(token: string): void {
+  const decoded = jwt.decode(token) as { jti?: string; exp?: number } | null;
+  if (!decoded?.jti) return;
+  const now = Date.now();
+  for (const [id, exp] of revoked) if (exp < now) revoked.delete(id);
+  revoked.set(decoded.jti, (decoded.exp ?? 0) * 1000 || now + 24 * 3600 * 1000);
+}
+
+function isRevoked(payload: { jti?: string }): boolean {
+  return !!payload.jti && revoked.has(payload.jti);
+}
+
 export function verifyAdminCredentials(email: string, password: string): { token: string; admin: AdminTokenPayload } | null {
   // Both comparisons are constant-time so response timing cannot be used to
   // guess the admin email or password byte by byte.
@@ -56,13 +79,15 @@ export function verifyAdminCredentials(email: string, password: string): { token
     name: config.admin.name,
     role: 'admin',
   };
-  const token = jwt.sign(payload, config.jwtSecret, { expiresIn: '12h' });
+  const token = jwt.sign(payload, config.jwtSecret, { algorithm: 'HS256', issuer: JWT_ISSUER, jwtid: crypto.randomUUID(), expiresIn: ADMIN_TOKEN_TTL });
   return { token, admin: payload };
 }
 
 export function verifyToken(token: string): AdminTokenPayload | null {
   try {
-    return jwt.verify(token, config.jwtSecret) as AdminTokenPayload;
+    const payload = jwt.verify(token, config.jwtSecret, VERIFY_OPTS) as AdminTokenPayload & { jti?: string };
+    if (isRevoked(payload)) return null;
+    return payload;
   } catch {
     return null;
   }
@@ -72,13 +97,15 @@ export function signCustomerToken(user: CustomerUser): string {
   return jwt.sign(
     { sub: user.id, phone: user.phone, name: user.name, role: 'customer' as const },
     config.jwtSecret,
-    { expiresIn: '30d' }
+    { algorithm: 'HS256', issuer: JWT_ISSUER, jwtid: crypto.randomUUID(), expiresIn: '30d' }
   );
 }
 
 export function verifyCustomerToken(token: string): CustomerTokenPayload | null {
   try {
-    return jwt.verify(token, config.jwtSecret) as CustomerTokenPayload;
+    const payload = jwt.verify(token, config.jwtSecret, VERIFY_OPTS) as CustomerTokenPayload & { jti?: string };
+    if (payload.role !== 'customer' || isRevoked(payload)) return null;
+    return payload;
   } catch {
     return null;
   }
