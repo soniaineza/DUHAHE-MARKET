@@ -51,11 +51,19 @@ function publicUser(user: { id: string; name: string; phone: string; email?: str
  * verified token (never from the request), so one customer can never read or change another's data.
  * Sends 401 and returns null when the caller is not signed in (or the account no longer exists).
  */
+/** The account behind a customer token, or undefined (bad/expired/revoked token, deleted account, or a session from before a password reset). */
+function customerFromToken(token: string) {
+  const payload = verifyCustomerToken(token);
+  const user = payload ? getUserByPhone(payload.phone) : undefined;
+  if (!payload || !user) return undefined;
+  if ((payload.pv ?? 0) !== (user.passwordChangedAt ?? 0)) return undefined;
+  return user;
+}
+
 function requireCustomer(req: Request, res: Response): string | null {
   const header = req.headers.authorization ?? '';
-  const payload = verifyCustomerToken(header.startsWith('Bearer ') ? header.slice(7) : '');
-  const user = payload ? getUserByPhone(payload.phone) : undefined;
-  if (!payload || !user) {
+  const user = customerFromToken(header.startsWith('Bearer ') ? header.slice(7) : '');
+  if (!user) {
     res.status(401).json({ error: 'Please sign in' });
     return null;
   }
@@ -293,6 +301,106 @@ customerRouter.post('/auth/login', (req, res) => {
   res.json({ data: { token: signCustomerToken(user), user: publicUser(user) } });
 });
 
+// ---- Forgot password -----------------------------------------------------------------------------------
+// A 6-digit code is emailed to the account's verified email. Asking never reveals whether an email is
+// registered (the answer is always the same). A successful reset signs out every other session.
+
+interface PendingReset {
+  codeHash: string;
+  userPhone: string;
+  expiresAt: number;
+  attempts: number;
+  sends: number;
+  lastSentAt: number;
+}
+const pendingResets = new Map<string, PendingReset>();
+
+customerRouter.post('/auth/forgot', codeSendRateLimit, async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  if (!isValidEmail(email)) {
+    res.status(400).json({ error: 'Please enter a valid email address' });
+    return;
+  }
+  if (!emailAvailable()) {
+    res.status(503).json({ error: 'Password reset is not available right now. Please try again later.' });
+    return;
+  }
+  const answer = () => res.status(202).json({ data: { ok: true, expiresInSeconds: CODE_TTL_MS / 1000 } });
+  const user = getUserByEmail(email);
+  if (!user) {
+    answer(); // same answer as for a real account, so the endpoint cannot be used to find who is registered
+    return;
+  }
+  const existing = pendingResets.get(email);
+  const now = Date.now();
+  if (existing && now - existing.lastSentAt < RESEND_COOLDOWN_MS) {
+    answer();
+    return;
+  }
+  const sends = existing && existing.expiresAt > now ? existing.sends : 0;
+  if (sends >= MAX_SENDS) {
+    answer();
+    return;
+  }
+  const code = newCode();
+  try {
+    await sendEmail(
+      email,
+      'Reset your Duhahe Rwanda Market password',
+      `Your password reset code is ${code}. It expires in 10 minutes. If you did not ask to reset your password, ignore this email - your password has not changed.`
+    );
+  } catch (err) {
+    console.error('Password reset email failed:', err instanceof Error ? err.message : err);
+    res.status(502).json({ error: 'We could not send the code. Please try again.' });
+    return;
+  }
+  pendingResets.set(email, { codeHash: hashCode(code), userPhone: user.phone, expiresAt: now + CODE_TTL_MS, attempts: 0, sends: sends + 1, lastSentAt: now });
+  answer();
+});
+
+customerRouter.post('/auth/reset', (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const confirm = typeof req.body?.confirmPassword === 'string' ? req.body.confirmPassword : '';
+  if (!isStrongPassword(password)) {
+    res.status(400).json({
+      error: 'Password needs at least 8 characters with an uppercase letter, a lowercase letter, a number and a symbol',
+    });
+    return;
+  }
+  if (password !== confirm) {
+    res.status(400).json({ error: 'Passwords do not match' });
+    return;
+  }
+  const pending = pendingResets.get(email);
+  if (!pending || pending.expiresAt < Date.now()) {
+    pendingResets.delete(email);
+    res.status(410).json({ error: 'The code expired. Please request a new one.' });
+    return;
+  }
+  pending.attempts += 1;
+  if (pending.attempts > MAX_CODE_ATTEMPTS) {
+    pendingResets.delete(email);
+    res.status(429).json({ error: 'Too many wrong codes. Please request a new one.' });
+    return;
+  }
+  if (!codeMatches(req.body?.code, pending.codeHash)) {
+    res.status(401).json({ error: 'The code is not correct' });
+    return;
+  }
+  const user = getUserByPhone(pending.userPhone);
+  if (!user || user.email !== email) {
+    pendingResets.delete(email);
+    res.status(410).json({ error: 'The code expired. Please request a new one.' });
+    return;
+  }
+  const updated = upsertUser({ ...user, passwordHash: hashPassword(password), passwordChangedAt: Date.now() });
+  pendingResets.delete(email);
+  loginFailures.delete(email);
+  loginFailures.delete(updated.phone.replace(/\D/g, '').slice(-9));
+  res.json({ data: { token: signCustomerToken(updated), user: publicUser(updated) } });
+});
+
 customerRouter.post('/auth/logout', (req, res) => {
   const header = req.headers.authorization ?? '';
   revokeToken(header.startsWith('Bearer ') ? header.slice(7) : '');
@@ -303,17 +411,12 @@ customerRouter.post('/auth/logout', (req, res) => {
 customerRouter.delete('/auth/account', (req, res) => {
   const header = req.headers.authorization ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  const payload = verifyCustomerToken(token);
-  if (!payload) {
+  const user = customerFromToken(token);
+  if (!user) {
     res.status(401).json({ error: 'Not authenticated' });
     return;
   }
   const password = typeof req.body?.password === 'string' ? req.body.password : '';
-  const user = getUserByPhone(payload.phone);
-  if (!user) {
-    res.status(404).json({ error: 'Account not found' });
-    return;
-  }
   const lockKey = user.phone.replace(/\D/g, '').slice(-9);
   if (user.passwordHash && (loginLocked(lockKey) || !verifyPassword(password, user.passwordHash))) {
     if (!loginLocked(lockKey)) noteLoginFailure(lockKey);
@@ -328,14 +431,9 @@ customerRouter.delete('/auth/account', (req, res) => {
 customerRouter.get('/auth/me', (req, res) => {
   const header = req.headers.authorization ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  const payload = verifyCustomerToken(token);
-  if (!payload) {
-    res.status(401).json({ error: 'Not authenticated' });
-    return;
-  }
-  const user = getUserByPhone(payload.phone);
+  const user = customerFromToken(token);
   if (!user) {
-    res.status(401).json({ error: 'Account not found' });
+    res.status(401).json({ error: 'Not authenticated' });
     return;
   }
   res.json({ data: { user: publicUser(user) } });

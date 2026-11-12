@@ -98,6 +98,10 @@ export default function SignInScreen() {
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
+            <Pressable onPress={() => nav.navigate('ForgotPassword')} hitSlop={8} style={{ alignSelf: 'flex-end' }}>
+              <Text style={styles.createLink}>{t('auth.forgotPassword')}</Text>
+            </Pressable>
+
             <Pressable onPress={submit} disabled={!canSubmit || busy} style={({ pressed }) => [styles.primaryBtn, (!canSubmit || pressed) && { opacity: 0.55 }]}>
               {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>{t('auth.signIn')}</Text>}
             </Pressable>

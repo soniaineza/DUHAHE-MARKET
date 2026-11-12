@@ -39,6 +39,8 @@ export interface AdminTokenPayload {
 }
 
 export interface CustomerTokenPayload {
+  /** Password version at sign-in: must equal the account's, so a password reset ends every older session. */
+  pv?: number;
   sub: string;
   phone: string;
   name: string;
@@ -95,7 +97,7 @@ export function verifyToken(token: string): AdminTokenPayload | null {
 
 export function signCustomerToken(user: CustomerUser): string {
   return jwt.sign(
-    { sub: user.id, phone: user.phone, name: user.name, role: 'customer' as const },
+    { sub: user.id, phone: user.phone, name: user.name, role: 'customer' as const, pv: user.passwordChangedAt ?? 0 },
     config.jwtSecret,
     { algorithm: 'HS256', issuer: JWT_ISSUER, jwtid: crypto.randomUUID(), expiresIn: '30d' }
   );

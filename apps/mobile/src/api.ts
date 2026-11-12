@@ -189,6 +189,10 @@ export const authApi = {
   /** Step 2: the codes prove ownership of the email (and phone); only then the account is created. */
   verifySignup: (email: string, emailCode: string, phoneCode?: string) =>
     post<AuthSession>('/auth/signup/verify', { email, emailCode, phoneCode }),
+  /** Emails a 6-digit reset code. Always answers the same, whether or not the email has an account. */
+  forgotPassword: (email: string) => post<{ ok: boolean; expiresInSeconds: number }>('/auth/forgot', { email }),
+  resetPassword: (payload: { email: string; code: string; password: string; confirmPassword: string }) =>
+    post<AuthSession>('/auth/reset', payload),
   /** `identifier` is the email OR phone number the account was registered with. */
   login: (identifier: string, password: string) => post<AuthSession>('/auth/login', { identifier, password }),
   deleteAccount: async (token: string, password: string) => {

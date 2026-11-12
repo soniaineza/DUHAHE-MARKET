@@ -24,6 +24,7 @@ import SearchScreen from '../screens/SearchScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import SignInScreen from '../screens/SignInScreen';
 import SignUpScreen from '../screens/SignUpScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import AddressesScreen from '../screens/AddressesScreen';
 import AccountScreen from '../screens/AccountScreen';
 import FavoritesScreen from '../screens/FavoritesScreen';
@@ -53,6 +54,7 @@ export type RootStackParamList = {
   Addresses: undefined;
   SignIn: undefined;
   SignUp: undefined;
+  ForgotPassword: undefined;
   Favorites: undefined;
 };
 
@@ -82,6 +84,7 @@ const Notifications = withChrome(narrow(NotificationsScreen, 760));
 const Addresses = withChrome(narrow(AddressesScreen, 760));
 const SignIn = narrow(SignInScreen, 520);
 const SignUp = narrow(SignUpScreen, 520);
+const ForgotPassword = narrow(ForgotPasswordScreen, 520);
 const Orders = narrow(OrdersScreen, 860);
 const Account = narrow(AccountScreen, 760);
 
@@ -310,6 +313,12 @@ export default function RootNavigator() {
       <Stack.Screen
         name="SignUp"
         component={SignUp}
+        options={{ animation: 'slide_from_right' }}
+      />
+
+      <Stack.Screen
+        name="ForgotPassword"
+        component={ForgotPassword}
         options={{ animation: 'slide_from_right' }}
       />
 

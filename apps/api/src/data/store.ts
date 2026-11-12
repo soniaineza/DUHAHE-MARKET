@@ -24,6 +24,8 @@ export interface CustomerUser {
   emailVerified?: boolean;
   /** True only when the phone number was confirmed by an SMS code. */
   phoneVerified?: boolean;
+  /** Epoch ms of the last password reset. Sessions issued before it are no longer accepted. */
+  passwordChangedAt?: number;
 }
 
 export interface AppNotification {
