@@ -11,6 +11,21 @@ function cleanEnvValue(value: string | undefined): string {
   return (value ?? '').trim().replace(/^["']+|["']+$/g, '');
 }
 
+/**
+ * Brevo shows API keys either as `xkeysib-...` or wrapped as base64 of {"api_key":"xkeysib-..."}. The API only
+ * accepts the inner key, so accept both forms here and the wrong paste can never break email.
+ */
+export function unwrapApiKey(raw: string): string {
+  const value = (raw ?? '').trim();
+  if (!value.startsWith('eyJ')) return value;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64').toString('utf8')) as { api_key?: unknown };
+    return typeof parsed.api_key === 'string' ? parsed.api_key.trim() : value;
+  } catch {
+    return value;
+  }
+}
+
 /** Origins that must always work, regardless of what the host's CORS_ORIGINS says. */
 const DEFAULT_CORS_ORIGINS = [
   'http://localhost:5173',
@@ -43,6 +58,16 @@ export const config = {
    * SMS uses Africa's Talking. Without email settings, new sign-ups are refused in production.
    */
   notify: {
+    /**
+     * Email over HTTPS through Brevo's API. Preferred on hosts that block outgoing SMTP ports (Render's free plan
+     * blocks 25/465/587). EMAIL_FROM must be a sender address verified in the Brevo dashboard.
+     */
+    brevo: {
+      apiKey: unwrapApiKey(cleanEnvValue(process.env.BREVO_API_KEY)),
+      from: cleanEnvValue(process.env.EMAIL_FROM),
+      fromName: cleanEnvValue(process.env.EMAIL_FROM_NAME) || 'Duhahe Rwanda Market',
+      baseUrl: (process.env.BREVO_BASE_URL ?? 'https://api.brevo.com').replace(/\/+$/, ''),
+    },
     smtp: {
       host: cleanEnvValue(process.env.SMTP_HOST),
       port: Number(process.env.SMTP_PORT ?? 465),
@@ -157,10 +182,14 @@ export function assertRuntimeConfig(): void {
     );
   }
 
-  if (!(config.notify.smtp.host && config.notify.smtp.user && config.notify.smtp.pass)) {
+  const brevoReady = !!(config.notify.brevo.apiKey && config.notify.brevo.from);
+  const smtpReady = !!(config.notify.smtp.host && config.notify.smtp.user && config.notify.smtp.pass);
+  if (!brevoReady && !smtpReady) {
     console.warn(
-      'WARNING: email is not configured (SMTP_HOST / SMTP_USER / SMTP_PASS). New customers cannot sign up until it is, because verification codes cannot be sent.'
+      'WARNING: email is not configured (set BREVO_API_KEY + EMAIL_FROM, or SMTP_HOST / SMTP_USER / SMTP_PASS). New customers cannot sign up until it is, because verification codes cannot be sent.'
     );
+  } else {
+    console.log(`Email delivery: ${brevoReady ? 'Brevo API (HTTPS)' : 'SMTP ' + config.notify.smtp.host + ':' + config.notify.smtp.port}`);
   }
 
   if (problems.length) {

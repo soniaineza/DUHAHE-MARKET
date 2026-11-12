@@ -2,7 +2,7 @@ import nodemailer, { type Transporter } from 'nodemailer';
 import { config } from '../config';
 
 /**
- * Delivery of verification codes by email (SMTP) and SMS (Africa's Talking).
+ * Delivery of verification codes by email (Brevo HTTPS API, or SMTP) and SMS (Africa's Talking).
  *
  * Nothing here ever pretends a message was sent: when a channel is not configured, `*Enabled()` is false
  * and callers must refuse the flow that depends on it. Outside production a code is printed to the server
@@ -12,7 +12,11 @@ import { config } from '../config';
 
 export const testOutbox: { channel: 'email' | 'sms'; to: string; text: string }[] = [];
 
-export const emailEnabled = (): boolean => !!(config.notify.smtp.host && config.notify.smtp.user && config.notify.smtp.pass);
+const brevoEnabled = (): boolean => !!(config.notify.brevo.apiKey && config.notify.brevo.from);
+const smtpEnabled = (): boolean => !!(config.notify.smtp.host && config.notify.smtp.user && config.notify.smtp.pass);
+export const emailEnabled = (): boolean => brevoEnabled() || smtpEnabled();
+/** Which provider will carry the next email. Brevo (HTTPS) wins: Render's free plan blocks SMTP ports. */
+export const emailProvider = (): 'brevo' | 'smtp' | null => (brevoEnabled() ? 'brevo' : smtpEnabled() ? 'smtp' : null);
 export const smsEnabled = (): boolean => !!(config.notify.sms.username && config.notify.sms.apiKey);
 
 const isTest = () => process.env.NODE_ENV === 'test';
@@ -42,6 +46,21 @@ export async function sendEmail(to: string, subject: string, text: string): Prom
   if (!emailEnabled()) {
     if (config.isProduction) throw new Error('Email delivery is not configured');
     console.log(`[dev email to ${to}] ${subject}: ${text}`);
+    return;
+  }
+  if (brevoEnabled()) {
+    const { apiKey, from, fromName, baseUrl } = config.notify.brevo;
+    const res = await fetch(`${baseUrl}/v3/smtp/email`, {
+      method: 'POST',
+      headers: { 'api-key': apiKey, accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify({ sender: { email: from, name: fromName }, to: [{ email: to }], subject, textContent: text }),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) {
+      // Brevo explains what is wrong (unverified sender, bad key, ...). The API key is never logged.
+      const detail = (await res.text().catch(() => '')).slice(0, 300);
+      throw new Error(`Brevo rejected the email (${res.status}): ${detail}`);
+    }
     return;
   }
   await getTransport().sendMail({ from: config.notify.smtp.from, to, subject, text });

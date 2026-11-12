@@ -26,6 +26,13 @@ services:
         sync: false
       - key: ADMIN_NAME
         value: Esperance Mukabaranga
+      # RECOMMENDED email (works on Render's free plan, which blocks SMTP): Brevo over HTTPS.
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: EMAIL_FROM_NAME
+        value: Duhahe Rwanda Market
       # Verification codes for new accounts. Email is REQUIRED in production (new sign-ups are refused without it).
       # Any SMTP account works, e.g. Gmail: SMTP_HOST=smtp.gmail.com, SMTP_PORT=465, SMTP_USER=<address>, SMTP_PASS=<app password>.
       - key: SMTP_HOST
