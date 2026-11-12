@@ -85,8 +85,8 @@ export default function AccountScreen() {
           <MenuItem icon="heart-outline" label={t('profileMenu.favorites')} onPress={() => nav.navigate('Favorites')} />
           <MenuItem icon="translate" label={t('profileMenu.language')} onPress={() => setLangOpen((v) => !v)} open={langOpen} />
           <MenuItem icon="information-outline" label={t('profileMenu.about')} onPress={() => { haptic('light'); nav.navigate('About'); }} />
-          <MenuItem icon="shield-lock-outline" label={t('profileMenu.privacy')} onPress={() => Linking.openURL(`${SITE}/privacy.html`)} />
-          <MenuItem icon="file-document-outline" label={t('profileMenu.terms')} onPress={() => Linking.openURL(`${SITE}/terms.html`)} />
+          <MenuItem icon="shield-lock-outline" label={t('profileMenu.privacy')} onPress={() => Linking.openURL(`${SITE}/privacy`)} />
+          <MenuItem icon="file-document-outline" label={t('profileMenu.terms')} onPress={() => Linking.openURL(`${SITE}/terms`)} />
           {signedIn && (
             <View style={styles.logoutRow}>
               <Icon name="logout" size={19} color={colors.danger} />
