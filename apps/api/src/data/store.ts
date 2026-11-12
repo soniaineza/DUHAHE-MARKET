@@ -19,6 +19,11 @@ export interface CustomerUser {
   createdAt: string;
   /** scrypt hash for password login (salt:hash). Never sent to clients. */
   passwordHash?: string;
+  /** Lower-cased email, verified by a code before the account existed. Older accounts may have none. */
+  email?: string;
+  emailVerified?: boolean;
+  /** True only when the phone number was confirmed by an SMS code. */
+  phoneVerified?: boolean;
 }
 
 export interface AppNotification {
@@ -329,8 +334,47 @@ export function upsertUser(user: CustomerUser): CustomerUser {
   return user;
 }
 
+/**
+ * Permanently delete a customer account and the personal data tied to it
+ * (profile, saved addresses, notifications, favourites, cart).
+ * Past orders are kept for accounting and payment reconciliation, but the
+ * name, email and delivery address on them are anonymised.
+ */
+export function deleteUserAccount(phone: string): boolean {
+  const existed = users.delete(phone);
+  for (let i = addresses.length - 1; i >= 0; i--) if (addresses[i].phone === phone) addresses.splice(i, 1);
+  for (let i = notifications.length - 1; i >= 0; i--) if (notifications[i].phone === phone) notifications.splice(i, 1);
+  favoritesByPhone.delete(phone);
+  cartsByPhone.delete(phone);
+  otpCodes.delete(phone);
+  for (const order of orders) {
+    if (order.accountPhone !== phone && order.customer.phone.replace(/\D/g, '') !== phone) continue;
+    order.customer = { name: 'Deleted customer', phone: order.customer.phone };
+    delete order.accountPhone;
+  }
+  persistSoon();
+  return existed;
+}
+
 export function getUserByPhone(phone: string): CustomerUser | undefined {
   return users.get(phone);
+}
+
+export function getUserByEmail(email: string): CustomerUser | undefined {
+  const wanted = email.trim().toLowerCase();
+  for (const u of users.values()) if (u.email === wanted) return u;
+  return undefined;
+}
+
+/** Find an account from a phone typed in any format (0788..., 250788..., +250 788...), including older accounts. */
+export function findUserByPhone(input: string): CustomerUser | undefined {
+  const digits = String(input ?? '').replace(/\D/g, '');
+  if (digits.length < 9) return undefined;
+  const direct = users.get(digits);
+  if (direct) return direct;
+  const tail = digits.slice(-9);
+  for (const u of users.values()) if (u.phone.replace(/\D/g, '').slice(-9) === tail) return u;
+  return undefined;
 }
 
 export function setOtp(phone: string, code: string): void {

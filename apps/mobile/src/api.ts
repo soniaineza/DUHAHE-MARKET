@@ -20,12 +20,31 @@ function resolveBaseUrl(): string {
 
 export const BASE_URL = resolveBaseUrl();
 
+// The signed-in customer's token is attached to every request. Customer data (addresses, cart, favourites,
+// notifications, orders) is identified by this token on the server, never by a phone number sent by the client.
+let authToken: string | null = null;
+let onUnauthorized: (() => void) | null = null;
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+export function setUnauthorizedHandler(fn: (() => void) | null) {
+  onUnauthorized = fn;
+}
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return authToken ? { ...extra, Authorization: `Bearer ${authToken}` } : extra;
+}
+/** A 401 while a token is set means the session expired or was revoked: sign the customer out. */
+function checkUnauthorized(res: Response) {
+  if (res.status === 401 && authToken && onUnauthorized) onUnauthorized();
+}
+
 interface Envelope<T> {
   data: T;
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`);
+  const res = await fetch(`${BASE_URL}${path}`, { headers: authHeaders() });
+  checkUnauthorized(res);
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
   const body = (await res.json()) as Envelope<T>;
   return body.data;
@@ -43,9 +62,10 @@ async function authGet<T>(path: string, token: string): Promise<T> {
 async function post<T>(path: string, payload: unknown): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
   });
+  checkUnauthorized(res);
   const body = await res.json();
   if (!res.ok || body.error) {
     throw new Error(body.error ?? `Request failed (${res.status})`);
@@ -56,9 +76,10 @@ async function post<T>(path: string, payload: unknown): Promise<T> {
 async function put<T>(path: string, payload: unknown): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
   });
+  checkUnauthorized(res);
   const body = await res.json();
   if (!res.ok || body.error) {
     throw new Error(body.error ?? `Request failed (${res.status})`);
@@ -67,7 +88,8 @@ async function put<T>(path: string, payload: unknown): Promise<T> {
 }
 
 async function del<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, { method: 'DELETE' });
+  const res = await fetch(`${BASE_URL}${path}`, { method: 'DELETE', headers: authHeaders() });
+  checkUnauthorized(res);
   const body = await res.json();
   if (!res.ok || body.error) {
     throw new Error(body.error ?? `Request failed (${res.status})`);
@@ -105,9 +127,12 @@ export const api = {
     note?: string;
   }) => post<Order>('/orders', payload),
 
-  recentOrders: (phone: string) => get<Order[]>(`/orders/${encodeURIComponent(phone)}/recent`),
+  /** The signed-in customer's own orders. */
+  myOrders: () => get<Order[]>('/orders/mine'),
 
-  orderById: (id: string) => get<Order>(`/orders/by-id/${encodeURIComponent(id)}`),
+  /** Guest-friendly lookup: both the order number and the phone it was placed with must match. */
+  trackOrder: (orderNumber: string, phone: string) =>
+    get<Order>(`/orders/track?orderNumber=${encodeURIComponent(orderNumber)}&phone=${encodeURIComponent(phone)}`),
 
   createPayment: (payload: {
     method: 'mtn_momo' | 'airtel_money' | 'cash_on_delivery';
@@ -129,6 +154,8 @@ export interface AuthUser {
   id: string;
   name: string;
   phone: string;
+  email?: string;
+  phoneVerified?: boolean;
   createdAt: string;
 }
 
@@ -137,9 +164,11 @@ export interface AuthSession {
   user: AuthUser;
 }
 
-export interface OtpResult {
-  phone: string;
-  registered: boolean;
+export interface SignupStarted {
+  email: string;
+  /** True when an SMS code was also sent and must be entered. */
+  phoneVerificationRequired: boolean;
+  expiresInSeconds: number;
 }
 
 export interface AppNotification {
@@ -153,11 +182,24 @@ export interface AppNotification {
 }
 
 export const authApi = {
-  signup: (name: string, phone: string, password: string) =>
-    post<AuthSession>('/auth/signup', { name, phone, password }),
-  login: (phone: string, password: string) => post<AuthSession>('/auth/login', { phone, password }),
-  requestOtp: (phone: string) => post<OtpResult>('/auth/request-otp', { phone }),
-  verifyOtp: (phone: string, code: string) => post<AuthSession>('/auth/verify', { phone, code }),
+  /** Step 1: validates the details and sends verification codes. No account exists yet. */
+  signup: (payload: { name: string; email: string; phone: string; password: string; confirmPassword: string }) =>
+    post<SignupStarted>('/auth/signup', payload),
+  resendCode: (email: string) => post<SignupStarted>('/auth/signup/resend', { email }),
+  /** Step 2: the codes prove ownership of the email (and phone); only then the account is created. */
+  verifySignup: (email: string, emailCode: string, phoneCode?: string) =>
+    post<AuthSession>('/auth/signup/verify', { email, emailCode, phoneCode }),
+  /** `identifier` is the email OR phone number the account was registered with. */
+  login: (identifier: string, password: string) => post<AuthSession>('/auth/login', { identifier, password }),
+  deleteAccount: async (token: string, password: string) => {
+    const res = await fetch(`${BASE_URL}/auth/account`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ password }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || body.error) throw new Error(body.error ?? `Request failed (${res.status})`);
+  },
   me: (token: string) => authGet<{ user: AuthUser }>('/auth/me', token),
   notifications: (phone: string) => get<AppNotification[]>(`/notifications?phone=${encodeURIComponent(phone)}`),
   markNotificationRead: (id: string) => post<AppNotification>(`/notifications/${id}/read`, {}),

@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 import type { Language } from '@duhahe/shared';
 import { useApp } from '../context/AppContext';
+import { authApi } from '../api';
 import Icon, { type IconName } from '../components/Icon';
 import { haptic, useToast } from '../components/Toast';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -13,23 +14,37 @@ import { colors, fontSizes, fonts, radii } from '../theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
+const SITE = 'https://duhaherwandamarket.store';
 const LANGS: Language[] = ['en', 'kin', 'fr'];
 const LANG_LABEL: Record<Language, string> = { en: 'English', kin: 'Kinyarwanda', fr: 'Français' };
 
 export default function AccountScreen() {
   const { t } = useTranslation();
-  const { lang, setLang, profile, user, signOut } = useApp();
+  const { lang, setLang, profile, user, token, signOut } = useApp();
   const nav = useNavigation<Nav>();
   const { show } = useToast();
 
   const [langOpen, setLangOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deletePw, setDeletePw] = useState('');
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  const confirmDelete = async () => {
+    if (!token || !deletePw || deleteBusy) return;
+    setDeleteBusy(true);
+    try {
+      await authApi.deleteAccount(token, deletePw);
+      haptic('medium');
+      signOut();
+      show(t('profileMenu.deleted'), 'info');
+    } catch {
+      show(t('profileMenu.deleteFailed'), 'error');
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
 
   const signedIn = !!user && !!profile;
-
-  const notifySoon = (label: string) => {
-    haptic('light');
-    show(label, 'info');
-  };
 
   const displayName = user?.name ?? profile?.name ?? '';
   const initial = (displayName.trim()[0] ?? 'D').toUpperCase();
@@ -68,9 +83,10 @@ export default function AccountScreen() {
           <MenuItem icon="receipt-text-outline" label={t('profileMenu.orders')} onPress={() => nav.navigate('Tabs', { screen: 'Orders' })} />
           <MenuItem icon="map-marker-outline" label={t('profileMenu.addresses')} onPress={() => nav.navigate('Addresses')} />
           <MenuItem icon="heart-outline" label={t('profileMenu.favorites')} onPress={() => nav.navigate('Favorites')} />
-          <MenuItem icon="credit-card-outline" label={t('profileMenu.payments')} onPress={() => notifySoon(t('payment.paymentsAvailable'))} />
           <MenuItem icon="translate" label={t('profileMenu.language')} onPress={() => setLangOpen((v) => !v)} open={langOpen} />
           <MenuItem icon="information-outline" label={t('profileMenu.about')} onPress={() => { haptic('light'); nav.navigate('About'); }} />
+          <MenuItem icon="shield-lock-outline" label={t('profileMenu.privacy')} onPress={() => Linking.openURL(`${SITE}/privacy.html`)} />
+          <MenuItem icon="file-document-outline" label={t('profileMenu.terms')} onPress={() => Linking.openURL(`${SITE}/terms.html`)} />
           {signedIn && (
             <View style={styles.logoutRow}>
               <Icon name="logout" size={19} color={colors.danger} />
@@ -80,6 +96,39 @@ export default function AccountScreen() {
             </View>
           )}
         </View>
+
+        {signedIn && (
+          <View style={styles.card}>
+            {!deleting ? (
+              <Pressable onPress={() => { haptic('light'); setDeleting(true); }} style={styles.logoutRow}>
+                <Icon name="delete-outline" size={19} color={colors.danger} />
+                <Text style={styles.logoutText}>{t('profileMenu.deleteAccount')}</Text>
+              </Pressable>
+            ) : (
+              <View style={{ gap: 10 }}>
+                <Text style={[styles.logoutText, { fontWeight: '800' }]}>{t('profileMenu.deleteTitle')}</Text>
+                <Text style={{ color: colors.muted, fontSize: fontSizes.sm }}>{t('profileMenu.deleteBody')}</Text>
+                <TextInput
+                  value={deletePw}
+                  onChangeText={setDeletePw}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  placeholder={t('profileMenu.deletePassword')}
+                  placeholderTextColor={colors.faint}
+                  style={{ borderWidth: 1, borderColor: colors.border ?? '#ddd', borderRadius: 10, padding: 12, color: colors.ink }}
+                />
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <Pressable onPress={() => { setDeleting(false); setDeletePw(''); }} style={[styles.authBtn, { flex: 1 }]}>
+                    <Text style={styles.authBtnGhostText}>{t('profileMenu.cancel')}</Text>
+                  </Pressable>
+                  <Pressable onPress={confirmDelete} disabled={!deletePw || deleteBusy} style={[styles.authBtn, { flex: 1, backgroundColor: colors.danger, opacity: !deletePw || deleteBusy ? 0.6 : 1 }]}>
+                    {deleteBusy ? <ActivityIndicator color="#fff" /> : <Text style={[styles.authBtnGhostText, { color: '#fff' }]}>{t('profileMenu.deleteConfirm')}</Text>}
+                  </Pressable>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
 
         {langOpen && (
           <View style={styles.card}>

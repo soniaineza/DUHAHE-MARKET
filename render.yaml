@@ -21,10 +21,35 @@ services:
         value: https://duhahe-admin.vercel.app,https://duhaherwandamarket.store,https://www.duhaherwandamarket.store,https://admin.duhaherwandamarket.store
       - key: ADMIN_EMAIL
         value: admin@duhahe.rw
+      # Set a strong ADMIN_PASSWORD (8+ chars) in the Render dashboard; the API refuses to start with a default.
       - key: ADMIN_PASSWORD
-        value: admin123
+        sync: false
       - key: ADMIN_NAME
         value: Esperance Mukabaranga
+      # Verification codes for new accounts. Email is REQUIRED in production (new sign-ups are refused without it).
+      # Any SMTP account works, e.g. Gmail: SMTP_HOST=smtp.gmail.com, SMTP_PORT=465, SMTP_USER=<address>, SMTP_PASS=<app password>.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: 465
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      # Optional: Africa's Talking SMS. When set, the phone number is verified by an SMS code too.
+      - key: AT_USERNAME
+        sync: false
+      - key: AT_API_KEY
+        sync: false
+      - key: AT_SENDER_ID
+        sync: false
+      # Store-review (Apple/Google) login. Set both values in the Render dashboard; leave unset to disable.
+      - key: REVIEWER_PHONE
+        sync: false
+      - key: REVIEWER_PASSWORD
+        sync: false
       - key: JWT_SECRET
         sync: false
       - key: MONGO_URI

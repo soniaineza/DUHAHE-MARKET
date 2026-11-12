@@ -19,27 +19,26 @@ export default function SignInScreen() {
   const nav = useNavigation<Nav>();
   const { show } = useToast();
 
-  const [phone, setPhone] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const phoneValid = phone.trim().length >= 9;
-  const canSubmit = phoneValid && password.length >= 6;
+  const canSubmit = identifier.trim().length >= 5 && password.length >= 1;
 
   const submit = async () => {
     if (!canSubmit || busy) return;
     setBusy(true);
     setError('');
     try {
-      const session = await authApi.login(phone.trim(), password);
+      const session = await authApi.login(identifier.trim(), password);
       signIn(session.token, session.user);
       haptic('success');
       show(t('auth.signedIn'), 'success');
       nav.goBack();
     } catch (e) {
       haptic('warning');
-      setError(e instanceof Error ? e.message : t('auth.invalidCredentials', 'Invalid phone number or password'));
+      setError(e instanceof Error ? e.message : t('auth.invalidCredentials'));
     } finally {
       setBusy(false);
     }
@@ -66,15 +65,17 @@ export default function SignInScreen() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.fieldLabel}>{t('auth.phone')}</Text>
+            <Text style={styles.fieldLabel}>{t('auth.emailOrPhone')}</Text>
             <View style={styles.inputWrap}>
-              <Icon name="phone-outline" size={18} color={colors.faint} />
+              <Icon name="account-outline" size={18} color={colors.faint} />
               <TextInput
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
+                value={identifier}
+                onChangeText={setIdentifier}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
                 editable={!busy}
-                placeholder="0788123456"
+                placeholder="name@email.com  /  0788123456"
                 placeholderTextColor={colors.faint}
                 style={styles.input}
               />

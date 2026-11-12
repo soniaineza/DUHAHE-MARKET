@@ -1,3 +1,4 @@
+import { requireAdmin } from '../middleware/auth';
 import { Router } from 'express';
 import { config } from '../config';
 import { getTransaction, paypackReady, verifySignature } from '../services/paypackService';
@@ -79,7 +80,7 @@ paypackWebhookRouter.post('/paypack', async (req, res) => {
  * Manual reconciliation of one provider reference (kept for operators / older clients). Applies the
  * provider's current answer to the attempt that owns the reference, through the same code path.
  */
-paypackWebhookRouter.post('/paypack/:ref/sync', async (req, res) => {
+paypackWebhookRouter.post('/paypack/:ref/sync', requireAdmin, async (req, res) => {
   if (!paypackReady()) {
     res.status(503).json({ error: 'Paypack is not configured' });
     return;
@@ -105,7 +106,7 @@ paypackWebhookRouter.post('/paypack/:ref/sync', async (req, res) => {
 });
 
 /** Tells the frontend where to send users and what the webhook URL is. */
-paypackWebhookRouter.get('/paypack/config', (_req, res) => {
+paypackWebhookRouter.get('/paypack/config', requireAdmin, (_req, res) => {
   res.json({
     data: {
       enabled: paypackReady(),

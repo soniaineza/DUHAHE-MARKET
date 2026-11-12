@@ -65,6 +65,7 @@ export interface CreateOrderResult {
 export function createOrderFromInput(input: {
   items: { productId: string; qty: number }[];
   customer: Customer;
+  accountPhone?: string;
   paymentMethod: PaymentMethod;
   note?: string;
 }): CreateOrderResult {
@@ -85,6 +86,7 @@ export function createOrderFromInput(input: {
     id: `ord-${crypto.randomUUID().slice(0, 8)}`,
     orderNumber: nextOrderNumber(),
     customer: input.customer,
+    accountPhone: input.accountPhone,
     items: calc.items,
     subtotal: calc.subtotal,
     deliveryFee: calc.deliveryFee,

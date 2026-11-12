@@ -14,6 +14,9 @@ import rateLimit from 'express-rate-limit';
 const limiterFactory = rateLimit({
   windowMs: 10 * 60 * 1000,
   limit: 10,
+  // Only FAILED attempts count: many customers share one mobile-carrier IP, so counting every request
+  // would let a few people lock everyone else out. Brute force is all failures, so it is still capped.
+  skipSuccessfulRequests: true,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { error: 'Too many attempts. Try again in a few minutes.' },
@@ -44,4 +47,32 @@ const apiLimiter = rateLimit({
 
 export function apiRateLimit(req: Parameters<typeof apiLimiter>[0], res: Parameters<typeof apiLimiter>[1], next: Parameters<typeof apiLimiter>[2]) {
   return apiLimiter(req, res, next);
+}
+
+
+/** Guest order lookups (order number + phone): tight enough to stop guessing, loose enough for real use. */
+const trackLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many lookups. Try again in a few minutes.' },
+});
+
+export function trackRateLimit(req: Parameters<typeof trackLimiter>[0], res: Parameters<typeof trackLimiter>[1], next: Parameters<typeof trackLimiter>[2]) {
+  return trackLimiter(req, res, next);
+}
+
+
+/** Sending a code costs money (SMS) and can spam a stranger's inbox, so EVERY request counts, successful or not. */
+const codeSendLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 6,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many verification requests. Try again in a few minutes.' },
+});
+
+export function codeSendRateLimit(req: Parameters<typeof codeSendLimiter>[0], res: Parameters<typeof codeSendLimiter>[1], next: Parameters<typeof codeSendLimiter>[2]) {
+  return codeSendLimiter(req, res, next);
 }

@@ -9,7 +9,8 @@ import { errorHandler, notFound, requestLogger } from './middleware/errorHandler
 import { apiRateLimit, authRateLimit } from './middleware/rateLimit';
 import { securityHeaders } from './middleware/security';
 import { seedOrders } from './data/seed';
-import { initializeStore, persistStore } from './data/store';
+import { initializeStore, persistStore, getUserByPhone, upsertUser } from './data/store';
+import { hashPassword } from './services/authService';
 
 function originAllowed(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
   if (!origin) return callback(null, true); // native apps / curl send no Origin
@@ -31,6 +32,17 @@ function originAllowed(origin: string | undefined, callback: (err: Error | null,
 
 export async function createApp() {
   await initializeStore();
+  if (config.reviewer && !getUserByPhone(config.reviewer.phone)) {
+    upsertUser({
+      id: 'usr-reviewer',
+      name: 'Store Reviewer',
+      phone: config.reviewer.phone,
+      role: 'customer',
+      createdAt: new Date().toISOString(),
+      passwordHash: hashPassword(config.reviewer.password),
+    });
+    console.log('Store-review account ready.');
+  }
   if (config.demoMode) {
     seedOrders();
   }

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BASE_URL } from '../api';
+import { BASE_URL, setAuthToken, setUnauthorizedHandler } from '../api';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { Language } from '@duhahe/shared';
 import { setLanguage } from '../i18n';
@@ -107,6 +107,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }),
     [lang, profile, token, user]
   );
+
+  // Keep the API client's token in sync during render so child effects always send the current one.
+  setAuthToken(token);
+  useEffect(() => {
+    // The server rejected our token (expired/revoked/account deleted): drop the local session.
+    setUnauthorizedHandler(() => {
+      setToken(null);
+      setUser(null);
+      setProfileState(null);
+      AsyncStorage.multiRemove([KEYS.token, KEYS.user, KEYS.profile]).catch(() => {});
+    });
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   if (!ready) return null;
   return <AppContext.Provider value={api}>{children}</AppContext.Provider>;

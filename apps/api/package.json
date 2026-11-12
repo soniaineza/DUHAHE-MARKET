@@ -10,7 +10,8 @@
     "build": "esbuild src/server.ts --bundle --platform=node --format=cjs --target=node20 --outfile=dist/server.cjs --log-level=warning",
     "seed": "tsx src/data/seed.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/__tests__/*.test.ts"
+    "check-email": "tsx scripts/check-email.ts",
+    "test": "tsx --test --test-force-exit src/__tests__/*.test.ts"
   },
   "dependencies": {
     "@duhahe/shared": "*",
@@ -20,13 +21,15 @@
     "express": "^4.21.1",
     "express-rate-limit": "^8.7.0",
     "jsonwebtoken": "^9.0.2",
-    "mongodb": "^7.6.0"
+    "mongodb": "^7.6.0",
+    "nodemailer": "^10.5.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.9.0",
+    "@types/nodemailer": "^8.0.2",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   }

@@ -36,23 +36,26 @@ export default function OrdersScreen() {
   const { products } = useCatalog();
   const { show } = useToast();
   const nav = useNavigation<Nav>();
-  const [phone, setPhone] = useState(user?.phone ?? profile?.phone ?? '');
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async (silent = false) => {
-    if (phone.trim().length < 9) return;
+    if (!user) {
+      setOrders([]);
+      setLoaded(false);
+      return;
+    }
     if (!silent) setLoading(true);
     try {
-      setOrders(await api.recentOrders(phone.trim()));
+      setOrders(await api.myOrders());
       setLoaded(true);
     } catch {
       // keep previous list
     } finally {
       setLoading(false);
     }
-  }, [phone]);
+  }, [user]);
 
   // Signed-in customers already have their phone: show their orders as soon as the tab is opened
   // (and refresh whenever they come back to it) instead of waiting for a tap on the search button.
@@ -89,23 +92,6 @@ export default function OrdersScreen() {
         <View style={{ width: 32 }} />
       </View>
 
-      <View style={styles.searchRow}>
-        <View style={styles.inputWrap}>
-          <Icon name="phone-outline" size={18} color={colors.faint} />
-          <TextInput
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
-            placeholder={t('checkout.phone')}
-            placeholderTextColor={colors.faint}
-            style={styles.input}
-          />
-        </View>
-<Pressable onPress={() => { haptic('light'); load(); }} style={({ pressed }) => [styles.loadBtn, pressed && { opacity: 0.85 }]}>
-            <Icon name="magnify" size={18} color={colors.white} />
-          </Pressable>
-      </View>
-
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -113,9 +99,18 @@ export default function OrdersScreen() {
           <RefreshControl refreshing={loading} onRefresh={() => load(true)} tintColor={colors.accent} colors={[colors.accent]} />
         }
       >
-        {loading && orders.length === 0 && <ActivityIndicator color={colors.accent} style={{ marginVertical: 20 }} />}
+        {!user && (
+          <View style={{ alignItems: 'center', gap: 14, paddingVertical: 40 }}>
+            <EmptyState icon="account-lock-outline" title={t('profileMenu.signInToView')} message="" />
+            <Pressable onPress={() => { haptic('light'); nav.navigate('SignIn'); }} style={({ pressed }) => [styles.loadBtn, { paddingHorizontal: 24, width: 'auto' as never }, pressed && { opacity: 0.85 }]}>
+              <Text style={{ color: colors.white, fontWeight: '800' }}>{t('auth.signIn')}</Text>
+            </Pressable>
+          </View>
+        )}
 
-        {loaded && orders.length === 0 && (
+        {user && loading && orders.length === 0 && <ActivityIndicator color={colors.accent} style={{ marginVertical: 20 }} />}
+
+        {user && loaded && orders.length === 0 && (
           <EmptyState icon="package-variant-closed" title={t('order.empty')} message={t('cart.emptyCta')} />
         )}
 

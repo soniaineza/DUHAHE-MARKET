@@ -2,7 +2,7 @@
   "expo": {
     "name": "Duhahe Rwanda Market",
     "slug": "duhahe-rwanda-market",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -16,20 +16,30 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.duhahe.market"
+      "bundleIdentifier": "com.duhahe.market",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.duhahe.market"
+      "package": "com.duhahe.market",
+      "versionCode": 1,
+      "permissions": []
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "extra": {
       "apiUrl": "https://duhahe-market-1.onrender.com/api"
+    },
+    "description": "Fresh produce and groceries delivered across Rwanda.",
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }

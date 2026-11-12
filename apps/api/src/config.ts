@@ -28,7 +28,37 @@ function parseCorsOrigins(): string[] {
   return Array.from(new Set([...DEFAULT_CORS_ORIGINS, ...fromEnv]));
 }
 
+/**
+ * Optional store-review account (Apple App Review / Google Play). Created at startup ONLY when both variables
+ * are set. It is a normal customer account with no extra privileges, and its orders are forced to cash on
+ * delivery so a reviewer can never trigger a real mobile-money charge.
+ */
+const reviewerPhone = (process.env.REVIEWER_PHONE ?? '').replace(/\D/g, '');
+const reviewerPassword = process.env.REVIEWER_PASSWORD ?? '';
+
 export const config = {
+  reviewer: reviewerPhone.length >= 9 && reviewerPassword.length >= 8 ? { phone: reviewerPhone, password: reviewerPassword } : null,
+  /**
+   * Verification-code delivery. Email uses any SMTP account (a Gmail address with an "app password" works).
+   * SMS uses Africa's Talking. Without email settings, new sign-ups are refused in production.
+   */
+  notify: {
+    smtp: {
+      host: cleanEnvValue(process.env.SMTP_HOST),
+      port: Number(process.env.SMTP_PORT ?? 465),
+      /** TLS from the first byte (port 465). Set SMTP_SECURE=false for STARTTLS ports such as 587. */
+      secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : Number(process.env.SMTP_PORT ?? 465) === 465,
+      user: cleanEnvValue(process.env.SMTP_USER),
+      pass: cleanEnvValue(process.env.SMTP_PASS),
+      from: cleanEnvValue(process.env.SMTP_FROM) || cleanEnvValue(process.env.SMTP_USER),
+    },
+    sms: {
+      username: cleanEnvValue(process.env.AT_USERNAME),
+      apiKey: cleanEnvValue(process.env.AT_API_KEY),
+      senderId: cleanEnvValue(process.env.AT_SENDER_ID),
+      baseUrl: process.env.AT_BASE_URL ?? 'https://api.africastalking.com',
+    },
+  },
   port: Number(process.env.PORT ?? 4000),
   host: process.env.HOST ?? '0.0.0.0',
   nodeEnv: process.env.NODE_ENV ?? 'development',
@@ -124,6 +154,12 @@ export function assertRuntimeConfig(): void {
   if (!adminPassword || INSECURE_VALUES.has(adminPassword.toLowerCase()) || adminPassword.length < 8) {
     problems.push(
       'ADMIN_PASSWORD is missing, a known default (e.g. admin123), or shorter than 8 characters — set a strong password on the host.'
+    );
+  }
+
+  if (!(config.notify.smtp.host && config.notify.smtp.user && config.notify.smtp.pass)) {
+    console.warn(
+      'WARNING: email is not configured (SMTP_HOST / SMTP_USER / SMTP_PASS). New customers cannot sign up until it is, because verification codes cannot be sent.'
     );
   }
 

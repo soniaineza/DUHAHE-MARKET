@@ -102,6 +102,8 @@ export interface Order {
   id: string;
   orderNumber: string;
   customer: Customer;
+  /** Phone of the signed-in account that placed the order (may differ from the delivery contact phone). */
+  accountPhone?: string;
   items: OrderItem[];
   subtotal: number;
   deliveryFee: number;

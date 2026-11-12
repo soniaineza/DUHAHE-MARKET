@@ -89,10 +89,9 @@ export default function OrderTrackingScreen({ route }: Props) {
       return;
     }
     try {
-      const orders = await api.recentOrders(phone);
-      const found = orders.find((o) => o.orderNumber === route.params.orderNumber || o.id === route.params.orderNumber);
-      setOrder(found ?? null);
-      setNotFound(!found);
+      const found = await api.trackOrder(route.params.orderNumber, phone);
+      setOrder(found);
+      setNotFound(false);
     } catch {
       setNotFound(true);
     } finally {

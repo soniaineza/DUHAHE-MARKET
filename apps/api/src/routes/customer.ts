@@ -1,14 +1,21 @@
+import crypto from 'node:crypto';
 import { Router } from 'express';
+import { config } from '../config';
 import type { Request, Response } from 'express';
-import { normalizeProvince, provinceOfDistrict, type PaymentMethod } from '@duhahe/shared';
-import { calculateOrder, createOrderFromInput, listOrders } from '../services/orderService';
+import { canonicalRwandaPhone, isStrongPassword, isValidEmail, normalizeEmail, normalizeProvince, provinceOfDistrict, type PaymentMethod } from '@duhahe/shared';
+import { emailAvailable, sendEmail, sendSms, smsAvailable } from '../services/notify';
+import { calculateOrder, createOrderFromInput, getOrderById, listOrders } from '../services/orderService';
 import { initiatePayment, syncOrderPayment } from '../services/paymentService';
+import { codeSendRateLimit, trackRateLimit } from '../middleware/rateLimit';
 import { signCustomerToken, verifyCustomerToken, revokeToken, hashPassword, verifyPassword } from '../services/authService';
 import {
   addAddress,
   consumeOtp,
+  deleteUserAccount,
   getCartFor,
   getFavoritesFor,
+  findUserByPhone,
+  getUserByEmail,
   getUserByPhone,
   listAddressesFor,
   listNotificationsFor,
@@ -28,95 +35,293 @@ function normalizePhone(value: unknown): string {
   return String(value ?? '').replace(/\D/g, '');
 }
 
+/** Same subscriber regardless of format (0788…, 250788…, +250 788…): compare the last 9 digits. */
+function samePhone(a: unknown, b: unknown): boolean {
+  const x = normalizePhone(a).slice(-9);
+  return x.length === 9 && x === normalizePhone(b).slice(-9);
+}
+
 /** Strip the password hash before any user object leaves the API. */
-function publicUser(user: { id: string; name: string; phone: string; role: 'customer'; createdAt: string }) {
-  return { id: user.id, name: user.name, phone: user.phone, role: user.role, createdAt: user.createdAt };
+function publicUser(user: { id: string; name: string; phone: string; email?: string; phoneVerified?: boolean; role: 'customer'; createdAt: string }) {
+  return { id: user.id, name: user.name, phone: user.phone, email: user.email, phoneVerified: !!user.phoneVerified, role: user.role, createdAt: user.createdAt };
+}
+
+/**
+ * Resolve the signed-in customer from the Bearer token. The phone number is ALWAYS taken from the
+ * verified token (never from the request), so one customer can never read or change another's data.
+ * Sends 401 and returns null when the caller is not signed in (or the account no longer exists).
+ */
+function requireCustomer(req: Request, res: Response): string | null {
+  const header = req.headers.authorization ?? '';
+  const payload = verifyCustomerToken(header.startsWith('Bearer ') ? header.slice(7) : '');
+  const user = payload ? getUserByPhone(payload.phone) : undefined;
+  if (!payload || !user) {
+    res.status(401).json({ error: 'Please sign in' });
+    return null;
+  }
+  return user.phone;
+}
+
+/** Per-account brute-force guard: 5 wrong passwords lock that phone's login for 15 minutes. */
+const loginFailures = new Map<string, { fails: number; lockedUntil: number }>();
+const MAX_FAILS = 5;
+const LOCK_MS = 15 * 60 * 1000;
+function loginLocked(phone: string): boolean {
+  const f = loginFailures.get(phone);
+  return !!f && f.lockedUntil > Date.now();
+}
+function noteLoginFailure(phone: string) {
+  const fails = (loginFailures.get(phone)?.fails ?? 0) + 1;
+  loginFailures.set(phone, fails >= MAX_FAILS ? { fails: 0, lockedUntil: Date.now() + LOCK_MS } : { fails, lockedUntil: 0 });
 }
 
 export const customerRouter = Router();
 
-customerRouter.post('/auth/signup', (req, res) => {
-  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
-  const phone = normalizePhone(req.body?.phone);
-  const password = typeof req.body?.password === 'string' ? req.body.password : '';
-  if (!name) {
-    res.status(400).json({ error: 'Name is required' });
-    return;
-  }
-  if (phone.length < 9) {
-    res.status(400).json({ error: 'A valid phone number is required' });
-    return;
-  }
-  if (password.length < 6) {
-    res.status(400).json({ error: 'Password must be at least 6 characters' });
-    return;
-  }
-  const existing = getUserByPhone(phone);
-  const user = upsertUser({
-    id: existing?.id ?? `usr-${crypto.randomUUID().slice(0, 8)}`,
-    name,
-    phone,
-    role: 'customer',
-    createdAt: existing?.createdAt ?? new Date().toISOString(),
-    passwordHash: hashPassword(password),
-  });
-  const token = signCustomerToken(user);
-  res.status(201).json({ data: { token, user: publicUser(user) } });
-});
+// ---- Sign-up with verified contact details --------------------------------------------------------------
+// An account only exists after the customer proves they own the email (and, when an SMS provider is
+// configured, the phone number) by entering the 6-digit codes we send. Until then nothing is created.
 
-customerRouter.post('/auth/login', (req, res) => {
-  const phone = normalizePhone(req.body?.phone);
-  const password = typeof req.body?.password === 'string' ? req.body.password : '';
-  if (phone.length < 9 || !password) {
-    res.status(400).json({ error: 'Phone and password are required' });
-    return;
-  }
-  const user = getUserByPhone(phone);
-  if (!user || !verifyPassword(password, user.passwordHash)) {
-    res.status(401).json({ error: 'Invalid phone number or password' });
-    return;
-  }
-  const token = signCustomerToken(user);
-  res.json({ data: { token, user: publicUser(user) } });
-});
+interface PendingSignup {
+  name: string;
+  email: string;
+  phone: string;
+  passwordHash: string;
+  emailCodeHash: string;
+  phoneCodeHash?: string;
+  expiresAt: number;
+  attempts: number;
+  sends: number;
+  lastSentAt: number;
+}
+const pendingSignups = new Map<string, PendingSignup>();
+const CODE_TTL_MS = 10 * 60 * 1000;
+const RESEND_COOLDOWN_MS = 60 * 1000;
+const MAX_CODE_ATTEMPTS = 5;
+const MAX_SENDS = 5;
 
-customerRouter.post('/auth/request-otp', (req, res) => {
-  const phone = normalizePhone(req.body?.phone);
-  if (phone.length < 9) {
-    res.status(400).json({ error: 'A valid phone number is required' });
-    return;
-  }
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  setOtp(phone, code);
-  // No SMS gateway is configured, so the code is not returned to the client.
-  // Customers sign in with their password; this endpoint stays for future SMS delivery.
-  res.json({ data: { phone, registered: !!getUserByPhone(phone) } });
-});
+const hashCode = (code: string) => crypto.createHash('sha256').update(`duhahe-code:${code}`).digest('hex');
+const newCode = () => String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+function codeMatches(input: unknown, expectedHash: string): boolean {
+  const a = Buffer.from(hashCode(String(input ?? '').trim()));
+  const b = Buffer.from(expectedHash);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+function sweepPending() {
+  const now = Date.now();
+  for (const [k, v] of pendingSignups) if (v.expiresAt < now) pendingSignups.delete(k);
+}
 
-customerRouter.post('/auth/verify', (req, res) => {
-  const phone = normalizePhone(req.body?.phone);
-  const code = String(req.body?.code ?? '').trim();
-  if (phone.length < 9 || !consumeOtp(phone, code)) {
-    res.status(401).json({ error: 'Invalid or expired code' });
-    return;
-  }
-  const existing = getUserByPhone(phone);
-  const user = upsertUser(
-    existing ?? {
-      id: `usr-${crypto.randomUUID().slice(0, 8)}`,
-      name: 'Duhahe customer',
-      phone,
-      role: 'customer',
-      createdAt: new Date().toISOString(),
-    }
+/** Generate fresh codes for a pending sign-up and deliver them. Throws if delivery fails. */
+async function sendSignupCodes(p: PendingSignup): Promise<void> {
+  const emailCode = newCode();
+  p.emailCodeHash = hashCode(emailCode);
+  const phoneCode = smsAvailable() ? newCode() : undefined;
+  p.phoneCodeHash = phoneCode ? hashCode(phoneCode) : undefined;
+  p.expiresAt = Date.now() + CODE_TTL_MS;
+  p.attempts = 0;
+  p.sends += 1;
+  p.lastSentAt = Date.now();
+  await sendEmail(
+    p.email,
+    'Your Duhahe Rwanda Market verification code',
+    `Your verification code is ${emailCode}. It expires in 10 minutes. If you did not try to create an account, ignore this email.`
   );
-  const token = signCustomerToken(user);
-  res.json({ data: { token, user: publicUser(user) } });
+  if (phoneCode) await sendSms(p.phone, `Duhahe Rwanda Market code: ${phoneCode}. Expires in 10 minutes.`);
+}
+
+customerRouter.post('/auth/signup', codeSendRateLimit, async (req, res) => {
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  const email = normalizeEmail(req.body?.email);
+  const phone = canonicalRwandaPhone(req.body?.phone);
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const confirm = typeof req.body?.confirmPassword === 'string' ? req.body.confirmPassword : '';
+  if (name.length < 2 || name.length > 80) {
+    res.status(400).json({ error: 'Please enter your full name' });
+    return;
+  }
+  if (!isValidEmail(email)) {
+    res.status(400).json({ error: 'Please enter a valid email address' });
+    return;
+  }
+  if (!phone) {
+    res.status(400).json({ error: 'Please enter a valid Rwandan mobile number (e.g. 0788 123 456)' });
+    return;
+  }
+  if (!isStrongPassword(password)) {
+    res.status(400).json({
+      error: 'Password needs at least 8 characters with an uppercase letter, a lowercase letter, a number and a symbol',
+    });
+    return;
+  }
+  if (password !== confirm) {
+    res.status(400).json({ error: 'Passwords do not match' });
+    return;
+  }
+  if (getUserByEmail(email) || findUserByPhone(phone)) {
+    res.status(409).json({ error: 'An account with this email or phone number already exists. Please sign in.' });
+    return;
+  }
+  if (!emailAvailable()) {
+    res.status(503).json({ error: 'Account verification is not available right now. Please try again later.' });
+    return;
+  }
+  sweepPending();
+  const existing = pendingSignups.get(email);
+  if (existing && Date.now() - existing.lastSentAt < RESEND_COOLDOWN_MS) {
+    res.status(429).json({ error: 'A code was just sent. Please wait a minute before trying again.' });
+    return;
+  }
+  const pending: PendingSignup = {
+    name,
+    email,
+    phone,
+    passwordHash: hashPassword(password),
+    emailCodeHash: '',
+    expiresAt: 0,
+    attempts: 0,
+    sends: existing?.sends ?? 0,
+    lastSentAt: 0,
+  };
+  if (pending.sends >= MAX_SENDS) {
+    res.status(429).json({ error: 'Too many codes requested. Please try again later.' });
+    return;
+  }
+  try {
+    await sendSignupCodes(pending);
+  } catch (err) {
+    console.error('Verification email/SMS failed:', err instanceof Error ? err.message : err);
+    res.status(502).json({
+      error: 'We could not send the verification code. Check your email address and phone number and try again.',
+    });
+    return;
+  }
+  pendingSignups.set(email, pending);
+  res.status(202).json({
+    data: { email, phoneVerificationRequired: !!pending.phoneCodeHash, expiresInSeconds: CODE_TTL_MS / 1000 },
+  });
+});
+
+customerRouter.post('/auth/signup/resend', codeSendRateLimit, async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  const pending = pendingSignups.get(email);
+  if (!pending) {
+    res.status(404).json({ error: 'Sign-up expired. Please start again.' });
+    return;
+  }
+  if (Date.now() - pending.lastSentAt < RESEND_COOLDOWN_MS) {
+    res.status(429).json({ error: 'Please wait a minute before requesting another code.' });
+    return;
+  }
+  if (pending.sends >= MAX_SENDS) {
+    pendingSignups.delete(email);
+    res.status(429).json({ error: 'Too many codes requested. Please start again later.' });
+    return;
+  }
+  try {
+    await sendSignupCodes(pending);
+  } catch (err) {
+    console.error('Verification resend failed:', err instanceof Error ? err.message : err);
+    res.status(502).json({ error: 'We could not send the code. Please try again.' });
+    return;
+  }
+  res.json({
+    data: { email, phoneVerificationRequired: !!pending.phoneCodeHash, expiresInSeconds: CODE_TTL_MS / 1000 },
+  });
+});
+
+customerRouter.post('/auth/signup/verify', (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  const pending = pendingSignups.get(email);
+  if (!pending || pending.expiresAt < Date.now()) {
+    pendingSignups.delete(email);
+    res.status(410).json({ error: 'The code expired. Please start again.' });
+    return;
+  }
+  pending.attempts += 1;
+  if (pending.attempts > MAX_CODE_ATTEMPTS) {
+    pendingSignups.delete(email);
+    res.status(429).json({ error: 'Too many wrong codes. Please start again.' });
+    return;
+  }
+  const emailOk = codeMatches(req.body?.emailCode, pending.emailCodeHash);
+  const phoneOk = pending.phoneCodeHash ? codeMatches(req.body?.phoneCode, pending.phoneCodeHash) : true;
+  if (!emailOk || !phoneOk) {
+    res.status(401).json({ error: !emailOk ? 'The email code is not correct' : 'The phone code is not correct' });
+    return;
+  }
+  if (getUserByEmail(email) || findUserByPhone(pending.phone)) {
+    pendingSignups.delete(email);
+    res.status(409).json({ error: 'An account with this email or phone number already exists. Please sign in.' });
+    return;
+  }
+  const user = upsertUser({
+    id: `usr-${crypto.randomUUID().slice(0, 8)}`,
+    name: pending.name,
+    phone: pending.phone,
+    email: pending.email,
+    emailVerified: true,
+    phoneVerified: !!pending.phoneCodeHash,
+    role: 'customer',
+    createdAt: new Date().toISOString(),
+    passwordHash: pending.passwordHash,
+  });
+  pendingSignups.delete(email);
+  res.status(201).json({ data: { token: signCustomerToken(user), user: publicUser(user) } });
+});
+
+/** Sign in with the email OR the phone number the account was registered with, plus the password. */
+customerRouter.post('/auth/login', (req, res) => {
+  const identifier = String(req.body?.identifier ?? req.body?.phone ?? '').trim();
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  if (!identifier || !password) {
+    res.status(400).json({ error: 'Email or phone and password are required' });
+    return;
+  }
+  const byEmail = identifier.includes('@');
+  const lockKey = byEmail ? normalizeEmail(identifier) : identifier.replace(/\D/g, '').slice(-9);
+  if (loginLocked(lockKey)) {
+    res.status(429).json({ error: 'Too many wrong passwords. Try again in 15 minutes.' });
+    return;
+  }
+  const user = byEmail ? getUserByEmail(identifier) : findUserByPhone(identifier);
+  if (!user || !verifyPassword(password, user.passwordHash)) {
+    noteLoginFailure(lockKey);
+    res.status(401).json({ error: 'Invalid email/phone or password' });
+    return;
+  }
+  loginFailures.delete(lockKey);
+  res.json({ data: { token: signCustomerToken(user), user: publicUser(user) } });
 });
 
 customerRouter.post('/auth/logout', (req, res) => {
   const header = req.headers.authorization ?? '';
   revokeToken(header.startsWith('Bearer ') ? header.slice(7) : '');
+  res.json({ data: { ok: true } });
+});
+
+/** Required by Apple App Store & Google Play: in-app account deletion. */
+customerRouter.delete('/auth/account', (req, res) => {
+  const header = req.headers.authorization ?? '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+  const payload = verifyCustomerToken(token);
+  if (!payload) {
+    res.status(401).json({ error: 'Not authenticated' });
+    return;
+  }
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const user = getUserByPhone(payload.phone);
+  if (!user) {
+    res.status(404).json({ error: 'Account not found' });
+    return;
+  }
+  const lockKey = user.phone.replace(/\D/g, '').slice(-9);
+  if (user.passwordHash && (loginLocked(lockKey) || !verifyPassword(password, user.passwordHash))) {
+    if (!loginLocked(lockKey)) noteLoginFailure(lockKey);
+    res.status(401).json({ error: 'Incorrect password' });
+    return;
+  }
+  deleteUserAccount(user.phone);
+  revokeToken(token);
   res.json({ data: { ok: true } });
 });
 
@@ -137,37 +342,33 @@ customerRouter.get('/auth/me', (req, res) => {
 });
 
 customerRouter.get('/notifications', (req, res) => {
-  const phone = normalizePhone(req.query.phone);
-  if (!phone) {
-    res.status(400).json({ error: 'Phone is required' });
-    return;
-  }
+  const phone = requireCustomer(req, res);
+  if (!phone) return;
   res.json({ data: listNotificationsFor(phone) });
 });
 
 customerRouter.post('/notifications/:id/read', (req, res) => {
-  const note = markNotificationRead(req.params.id);
-  if (!note) {
+  const phone = requireCustomer(req, res);
+  if (!phone) return;
+  if (!listNotificationsFor(phone).some((n) => n.id === req.params.id)) {
     res.status(404).json({ error: 'Notification not found' });
     return;
   }
-  res.json({ data: note });
+  res.json({ data: markNotificationRead(req.params.id) });
 });
 
 customerRouter.get('/addresses', (req, res) => {
-  const phone = normalizePhone(req.query.phone);
-  if (!phone) {
-    res.status(400).json({ error: 'Phone is required' });
-    return;
-  }
+  const phone = requireCustomer(req, res);
+  if (!phone) return;
   res.json({ data: listAddressesFor(phone) });
 });
 
 customerRouter.post('/addresses', (req, res) => {
+  const phone = requireCustomer(req, res);
+  if (!phone) return;
   const { label, name, province, district, address, isDefault } = req.body ?? {};
-  const phone = normalizePhone(req.body?.phone);
-  if (!phone || !name || !province || !district) {
-    res.status(400).json({ error: 'Phone, name, province and district are required' });
+  if (!name || !province || !district) {
+    res.status(400).json({ error: 'Name, province and district are required' });
     return;
   }
   const saved = addAddress({
@@ -183,20 +384,18 @@ customerRouter.post('/addresses', (req, res) => {
 });
 
 customerRouter.delete('/addresses/:id', (req, res) => {
-  const removed = removeAddress(req.params.id);
-  if (!removed) {
+  const phone = requireCustomer(req, res);
+  if (!phone) return;
+  if (!listAddressesFor(phone).some((a) => a.id === req.params.id)) {
     res.status(404).json({ error: 'Address not found' });
     return;
   }
-  res.json({ data: removed });
+  res.json({ data: removeAddress(req.params.id) });
 });
 
 customerRouter.post('/addresses/:id/default', (req, res) => {
-  const phone = normalizePhone(req.body?.phone);
-  if (!phone) {
-    res.status(400).json({ error: 'Phone is required' });
-    return;
-  }
+  const phone = requireCustomer(req, res);
+  if (!phone) return;
   const updated = setDefaultAddress(phone, req.params.id);
   if (!updated) {
     res.status(404).json({ error: 'Address not found' });
@@ -206,49 +405,38 @@ customerRouter.post('/addresses/:id/default', (req, res) => {
 });
 
 customerRouter.get('/favorites', (req, res) => {
-  const phone = normalizePhone(req.query.phone);
-  if (!phone) {
-    res.status(400).json({ error: 'Phone is required' });
-    return;
-  }
+  const phone = requireCustomer(req, res);
+  if (!phone) return;
   res.json({ data: { ids: getFavoritesFor(phone) } });
 });
 
 customerRouter.put('/favorites', (req, res) => {
-  const phone = normalizePhone(req.body?.phone);
-  if (!phone) {
-    res.status(400).json({ error: 'Phone is required' });
-    return;
-  }
+  const phone = requireCustomer(req, res);
+  if (!phone) return;
   const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
   res.json({ data: { ids: setFavoritesFor(phone, ids) } });
 });
 
 customerRouter.post('/favorites/toggle', (req, res) => {
-  const phone = normalizePhone(req.body?.phone);
+  const phone = requireCustomer(req, res);
+  if (!phone) return;
   const productId = typeof req.body?.productId === 'string' ? req.body.productId.trim() : '';
-  if (!phone || !productId) {
-    res.status(400).json({ error: 'Phone and productId are required' });
+  if (!productId) {
+    res.status(400).json({ error: 'productId is required' });
     return;
   }
   res.json({ data: { ids: toggleFavorite(phone, productId) } });
 });
 
 customerRouter.get('/cart', (req, res) => {
-  const phone = normalizePhone(req.query.phone);
-  if (!phone) {
-    res.status(400).json({ error: 'Phone is required' });
-    return;
-  }
+  const phone = requireCustomer(req, res);
+  if (!phone) return;
   res.json({ data: { items: getCartFor(phone) } });
 });
 
 customerRouter.put('/cart', (req, res) => {
-  const phone = normalizePhone(req.body?.phone);
-  if (!phone) {
-    res.status(400).json({ error: 'Phone is required' });
-    return;
-  }
+  const phone = requireCustomer(req, res);
+  if (!phone) return;
   const items = Array.isArray(req.body?.items) ? req.body.items : [];
   res.json({ data: { items: setCartFor(phone, items) } });
 });
@@ -268,6 +456,8 @@ customerRouter.post('/orders/calculate', (req, res) => {
 });
 
 customerRouter.post('/orders', (req, res) => {
+  const accountPhone = requireCustomer(req, res);
+  if (!accountPhone) return;
   const { items, customer, paymentMethod, note } = req.body ?? {};
   if (!Array.isArray(items) || items.length === 0) {
     res.status(400).json({ error: 'Items are required' });
@@ -277,8 +467,10 @@ customerRouter.post('/orders', (req, res) => {
     res.status(400).json({ error: 'Customer name and phone are required' });
     return;
   }
-  const method = METHODS.includes(paymentMethod) ? paymentMethod : 'cash_on_delivery';
-  const result = createOrderFromInput({ items, customer, paymentMethod: method, note });
+  let method = METHODS.includes(paymentMethod) ? paymentMethod : 'cash_on_delivery';
+  // Store-review account: never start a real mobile-money charge.
+  if (config.reviewer && accountPhone === config.reviewer.phone) method = 'cash_on_delivery';
+  const result = createOrderFromInput({ items, customer, accountPhone, paymentMethod: method, note });
   if (result.errors) {
     res.status(409).json({ error: 'Some items could not be ordered', details: result.errors });
     return;
@@ -286,8 +478,17 @@ customerRouter.post('/orders', (req, res) => {
   res.status(201).json({ data: result.order });
 });
 
-customerRouter.get('/orders/by-id/:id', (req, res) => {
-  const order = listOrders().find((o) => o.id === req.params.id);
+/**
+ * Guest-friendly tracking: a single order is returned only when BOTH the order number and the phone
+ * number it was placed with match (order numbers alone are sequential and guessable).
+ */
+customerRouter.get('/orders/track', trackRateLimit, (req, res) => {
+  const orderNumber = typeof req.query.orderNumber === 'string' ? req.query.orderNumber.trim() : '';
+  const phone = normalizePhone(req.query.phone);
+  const order =
+    orderNumber && phone.length >= 9
+      ? listOrders().find((o) => o.orderNumber === orderNumber && samePhone(o.customer.phone, phone))
+      : undefined;
   if (!order) {
     res.status(404).json({ error: 'Order not found' });
     return;
@@ -295,15 +496,24 @@ customerRouter.get('/orders/by-id/:id', (req, res) => {
   res.json({ data: order });
 });
 
-customerRouter.get('/orders/:phone/recent', (req, res) => {
-  const phone = req.params.phone.replace(/\D/g, '');
+/** The signed-in customer's own recent orders. */
+customerRouter.get('/orders/mine', (req, res) => {
+  const phone = requireCustomer(req, res);
+  if (!phone) return;
   const mine = listOrders()
-    .filter((o) => o.customer.phone.replace(/\D/g, '').endsWith(phone))
+    .filter((o) => o.accountPhone === phone || samePhone(o.customer.phone, phone))
     .slice(0, 20);
   res.json({ data: mine });
 });
 
+/** An order belongs to the account that placed it (or, for older orders, the account whose phone it carries). */
+function ownsOrder(order: { accountPhone?: string; customer: { phone: string } } | undefined, phone: string): boolean {
+  return !!order && (order.accountPhone === phone || samePhone(order.customer.phone, phone));
+}
+
 const createPaymentHandler = async (req: Request, res: Response) => {
+  const accountPhone = requireCustomer(req, res);
+  if (!accountPhone) return;
   const { method, orderId, phone, amount, supersedeAttemptId } = req.body ?? {};
   if (!orderId || !phone || amount === undefined || amount === null || amount === '') {
     res.status(400).json({ error: 'orderId, phone and amount are required' });
@@ -311,6 +521,10 @@ const createPaymentHandler = async (req: Request, res: Response) => {
   }
   if (!Number.isFinite(Number(amount))) {
     res.status(400).json({ error: 'amount must be a number' });
+    return;
+  }
+  if (!ownsOrder(getOrderById(String(orderId)), accountPhone)) {
+    res.status(404).json({ error: 'Order not found' });
     return;
   }
   // NOTE: the amount is only a client claim — paymentService rejects it unless
@@ -338,6 +552,12 @@ customerRouter.post('/payments/stub', createPaymentHandler);
  * Paypack so approval, cancellation and expiry are all detected.
  */
 customerRouter.get('/payments/status/:orderId', async (req, res) => {
+  const accountPhone = requireCustomer(req, res);
+  if (!accountPhone) return;
+  if (!ownsOrder(getOrderById(req.params.orderId), accountPhone)) {
+    res.status(404).json({ error: 'Order not found' });
+    return;
+  }
   try {
     const attemptId = typeof req.query.attempt === 'string' ? req.query.attempt : undefined;
     const result = await syncOrderPayment(req.params.orderId, attemptId);
