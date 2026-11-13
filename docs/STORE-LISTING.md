@@ -175,7 +175,7 @@ Replace the two placeholders with the `REVIEWER_PHONE` / `REVIEWER_PASSWORD` you
 ## 7. Order of work
 
 1. Privacy/terms/delete pages live (done when the three URLs open the real pages).
-2. Buy accounts (Apple needs the D-U-N-S number first; Google Play needs identity verification).
+2. Buy accounts (Apple: pay the $99/year Developer Program fee as an individual (D-U-N-S is only for organizations); Google Play: finish identity + phone verification).
 3. `eas login` → `eas init` → `eas build -p android --profile production` and `-p ios` (needs the Apple account).
 4. Create the app in each store, fill in this kit, upload screenshots, upload the build.
 5. Google Play only (personal account): run a **closed test with 12 testers for 14 days** before "Apply for production".

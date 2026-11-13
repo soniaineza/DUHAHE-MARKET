@@ -35,11 +35,15 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiUrl": "https://duhahe-market-1.onrender.com/api"
+      "apiUrl": "https://duhahe-market-1.onrender.com/api",
+      "eas": {
+        "projectId": "07e5b03a-6183-4028-85ce-91a622fd51dc"
+      }
     },
     "description": "Fresh produce and groceries delivered across Rwanda.",
     "runtimeVersion": {
       "policy": "appVersion"
-    }
+    },
+    "owner": "soniaineza"
   }
 }

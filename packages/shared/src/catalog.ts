@@ -241,7 +241,6 @@ const drinks: SeedItem[] = [
   { id: 'd007', sku: 'DRK-007', category: 'drinks', name: ['Orange soda 2L', 'Soda y’amacunga 2L', 'Soda orange 2L'], price: 2000, unit: 'bottle', stockQty: 350, minOrderQty: 1, step: 1, emoji: '🍊', organic: false },
   { id: 'd008', sku: 'DRK-008', category: 'drinks', name: ['Ginger drink 1L', 'Icyotsi cy’itanjagija 1L', 'Boisson au gingembre 1L'], price: 1800, unit: 'liter', stockQty: 200, minOrderQty: 1, step: 1, emoji: '🫚', organic: false },
   { id: 'd009', sku: 'DRK-009', category: 'drinks', name: ['Energy drink 250ml', 'Energy drink 250ml', 'Boisson énergisante 250ml'], price: 1500, unit: 'can', stockQty: 300, minOrderQty: 1, step: 1, emoji: '⚡', organic: false },
-  { id: 'd010', sku: 'DRK-010', category: 'drinks', name: ['Sorghum beer (Ikigage) 1L', 'Ikigage 1L', 'Bière de sorgho (Ikigage) 1L'], price: 1200, unit: 'liter', stockQty: 180, minOrderQty: 1, step: 1, emoji: '🍺', organic: false },
 ];
 
 // ---------------------------------------------------------------------------

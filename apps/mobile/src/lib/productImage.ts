@@ -172,7 +172,6 @@ export const productPhoto: Record<string, string> = {
   d007: photo('photo-1619241638225-14d56e47ae64'), // orange soda
   d008: photo('photo-1606486746458-e44951581ade'), // ginger drink
   d009: photo('photo-1560689189-65b6ed6228e7'), // energy drink
-  d010: photo('photo-1779937882755-e980096a1612'), // sorghum beer
 
   // ---------------------------------------------------------- Personal care
   p001: photo('photo-1546552768-9e3a94b38a59'), // bath soap
