@@ -12,8 +12,10 @@ import {
   addAddress,
   consumeOtp,
   deleteUserAccount,
+  deleteResetCode,
   getCartFor,
   getFavoritesFor,
+  getResetCode,
   findUserByPhone,
   getUserByEmail,
   getUserByPhone,
@@ -25,6 +27,8 @@ import {
   setDefaultAddress,
   setFavoritesFor,
   setOtp,
+  setResetCode,
+  sweepResetCodes,
   toggleFavorite,
   upsertUser,
 } from '../data/store';
@@ -305,16 +309,6 @@ customerRouter.post('/auth/login', (req, res) => {
 // A 6-digit code is emailed to the account's verified email. Asking never reveals whether an email is
 // registered (the answer is always the same). A successful reset signs out every other session.
 
-interface PendingReset {
-  codeHash: string;
-  userPhone: string;
-  expiresAt: number;
-  attempts: number;
-  sends: number;
-  lastSentAt: number;
-}
-const pendingResets = new Map<string, PendingReset>();
-
 customerRouter.post('/auth/forgot', codeSendRateLimit, async (req, res) => {
   const email = normalizeEmail(req.body?.email);
   if (!isValidEmail(email)) {
@@ -325,13 +319,14 @@ customerRouter.post('/auth/forgot', codeSendRateLimit, async (req, res) => {
     res.status(503).json({ error: 'Password reset is not available right now. Please try again later.' });
     return;
   }
+  sweepResetCodes();
   const answer = () => res.status(202).json({ data: { ok: true, expiresInSeconds: CODE_TTL_MS / 1000 } });
   const user = getUserByEmail(email);
   if (!user) {
     answer(); // same answer as for a real account, so the endpoint cannot be used to find who is registered
     return;
   }
-  const existing = pendingResets.get(email);
+  const existing = getResetCode(email);
   const now = Date.now();
   if (existing && now - existing.lastSentAt < RESEND_COOLDOWN_MS) {
     answer();
@@ -354,7 +349,7 @@ customerRouter.post('/auth/forgot', codeSendRateLimit, async (req, res) => {
     res.status(502).json({ error: 'We could not send the code. Please try again.' });
     return;
   }
-  pendingResets.set(email, { codeHash: hashCode(code), userPhone: user.phone, expiresAt: now + CODE_TTL_MS, attempts: 0, sends: sends + 1, lastSentAt: now });
+  setResetCode({ email, codeHash: hashCode(code), userPhone: user.phone, expiresAt: now + CODE_TTL_MS, attempts: 0, sends: sends + 1, lastSentAt: now });
   answer();
 });
 
@@ -372,30 +367,32 @@ customerRouter.post('/auth/reset', (req, res) => {
     res.status(400).json({ error: 'Passwords do not match' });
     return;
   }
-  const pending = pendingResets.get(email);
-  if (!pending || pending.expiresAt < Date.now()) {
-    pendingResets.delete(email);
+  sweepResetCodes();
+  const pending = getResetCode(email);
+  if (!pending) {
+    deleteResetCode(email);
     res.status(410).json({ error: 'The code expired. Please request a new one.' });
     return;
   }
-  pending.attempts += 1;
-  if (pending.attempts > MAX_CODE_ATTEMPTS) {
-    pendingResets.delete(email);
+  const attempts = pending.attempts + 1;
+  if (attempts > MAX_CODE_ATTEMPTS) {
+    deleteResetCode(email);
     res.status(429).json({ error: 'Too many wrong codes. Please request a new one.' });
     return;
   }
+  setResetCode({ ...pending, attempts });
   if (!codeMatches(req.body?.code, pending.codeHash)) {
     res.status(401).json({ error: 'The code is not correct' });
     return;
   }
   const user = getUserByPhone(pending.userPhone);
   if (!user || user.email !== email) {
-    pendingResets.delete(email);
+    deleteResetCode(email);
     res.status(410).json({ error: 'The code expired. Please request a new one.' });
     return;
   }
   const updated = upsertUser({ ...user, passwordHash: hashPassword(password), passwordChangedAt: Date.now() });
-  pendingResets.delete(email);
+  deleteResetCode(email);
   loginFailures.delete(email);
   loginFailures.delete(updated.phone.replace(/\D/g, '').slice(-9));
   res.json({ data: { token: signCustomerToken(updated), user: publicUser(updated) } });
@@ -414,6 +411,10 @@ customerRouter.delete('/auth/account', (req, res) => {
   const user = customerFromToken(token);
   if (!user) {
     res.status(401).json({ error: 'Not authenticated' });
+    return;
+  }
+  if (config.reviewer && samePhone(user.phone, config.reviewer.phone)) {
+    res.status(403).json({ error: 'The store-review account cannot be deleted from the app.' });
     return;
   }
   const password = typeof req.body?.password === 'string' ? req.body.password : '';
@@ -566,9 +567,12 @@ customerRouter.post('/orders', (req, res) => {
     return;
   }
   let method = METHODS.includes(paymentMethod) ? paymentMethod : 'cash_on_delivery';
-  // Store-review account: never start a real mobile-money charge.
-  if (config.reviewer && accountPhone === config.reviewer.phone) method = 'cash_on_delivery';
-  const result = createOrderFromInput({ items, customer, accountPhone, paymentMethod: method, note });
+  // Store-review account: never start a real mobile-money charge, and never let the
+  // published demo credentials be used to place an order for somebody else's phone.
+  const isReviewer = !!config.reviewer && samePhone(accountPhone, config.reviewer.phone);
+  if (isReviewer) method = 'cash_on_delivery';
+  const orderCustomer = isReviewer ? { ...customer, name: 'Store Reviewer', phone: accountPhone } : customer;
+  const result = createOrderFromInput({ items, customer: orderCustomer, accountPhone, paymentMethod: method, note });
   if (result.errors) {
     res.status(409).json({ error: 'Some items could not be ordered', details: result.errors });
     return;
@@ -623,6 +627,12 @@ const createPaymentHandler = async (req: Request, res: Response) => {
   }
   if (!ownsOrder(getOrderById(String(orderId)), accountPhone)) {
     res.status(404).json({ error: 'Order not found' });
+    return;
+  }
+  // The store-review password is published in the App Store listing. Even if someone
+  // calls the payment API directly, no reviewer order may start a real charge.
+  if (config.reviewer && samePhone(accountPhone, config.reviewer.phone)) {
+    res.status(403).json({ error: 'The store-review account can only pay on delivery.' });
     return;
   }
   // NOTE: the amount is only a client claim — paymentService rejects it unless

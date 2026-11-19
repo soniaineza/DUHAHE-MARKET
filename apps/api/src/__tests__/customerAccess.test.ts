@@ -124,7 +124,75 @@ describe('store-review account', () => {
       })).json() as any).data;
       assert.equal(order.paymentMethod, 'cash_on_delivery');
     } finally {
-      srv.close();
+      await new Promise<void>((resolve) => srv.close(() => resolve()));
+    }
+  });
+
+  it('cannot delete the account or pay by mobile money', async () => {
+    const { config } = await import('../config');
+    (config as { reviewer: unknown }).reviewer = { phone: '250788999000', password: 'reviewpass1' };
+    const { createApp } = await import('../app');
+    const app = await createApp();
+    const srv = http.createServer(app).listen(0);
+    const b = `http://127.0.0.1:${(srv.address() as AddressInfo).port}/api`;
+    const auth = { 'Content-Type': 'application/json', Authorization: '' };
+    try {
+      const login = await (await fetch(`${b}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: '250788999000', password: 'reviewpass1' }) })).json() as any;
+      auth.Authorization = `Bearer ${login.data.token}`;
+
+      const del = await fetch(`${b}/auth/account`, { method: 'DELETE', headers: auth, body: JSON.stringify({ password: 'reviewpass1' }) });
+      assert.equal(del.status, 403);
+      assert.match(((await del.json()) as any).error, /cannot be deleted/);
+      assert.equal((await fetch(`${b}/auth/me`, { headers: auth })).status, 200);
+
+      const products = (await (await fetch(`${b}/products`)).json() as any).data;
+      const order = (await (await fetch(`${b}/orders`, {
+        method: 'POST',
+        headers: auth,
+        body: JSON.stringify({ items: [{ productId: products[0].id, qty: 1 }], customer: { name: 'R', phone: '250788999000', district: 'Gasabo', province: 'Kigali' }, paymentMethod: 'cash_on_delivery' }),
+      })).json() as any).data;
+      const payRes = await fetch(`${b}/payments/create`, {
+        method: 'POST',
+        headers: auth,
+        body: JSON.stringify({ orderId: order.id, method: 'mtn_momo', phone: '250788999000', amount: order.total }),
+      });
+      assert.equal(payRes.status, 403);
+      assert.match(((await payRes.json()) as any).error, /only pay on delivery/);
+
+      const { initiatePayment } = await import('../services/paymentService');
+      const direct = await initiatePayment({ method: 'mtn_momo', orderId: order.id, phone: '250788999000', amount: order.total });
+      assert.equal(direct.success, false);
+      assert.match(direct.message.en, /only pay on delivery/);
+      assert.equal(direct.attemptId, undefined);
+    } finally {
+      await new Promise<void>((resolve) => srv.close(() => resolve()));
+    }
+  });
+});
+
+describe('admin customer export', () => {
+  it('does not expose password hashes', async () => {
+    const { upsertUser, deleteUserAccount } = await import('../data/store');
+    const { config } = await import('../config');
+    const { createApp } = await import('../app');
+    const phone = '250788000222';
+    upsertUser({ id: 'usr-admin-leak', name: 'No Hash', phone, role: 'customer', createdAt: new Date().toISOString(), passwordHash: 'super-secret-hash' });
+    const srv = http.createServer(await createApp()).listen(0);
+    const adminBase = `http://127.0.0.1:${(srv.address() as AddressInfo).port}/api`;
+    try {
+      const login = await (await fetch(`${adminBase}/admin/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: config.admin.email, password: config.admin.password }),
+      })).json() as any;
+      for (const path of ['/admin/customers', '/admin/export']) {
+        const res = await fetch(adminBase + path, { headers: { Authorization: `Bearer ${login.data.token}` } });
+        assert.equal(res.status, 200);
+        assert.equal((await res.text()).includes('super-secret-hash'), false, `${path} must not leak passwordHash`);
+      }
+    } finally {
+      await new Promise<void>((resolve) => srv.close(() => resolve()));
+      deleteUserAccount(phone);
     }
   });
 });

@@ -26,6 +26,19 @@ export interface CustomerUser {
   phoneVerified?: boolean;
   /** Epoch ms of the last password reset. Sessions issued before it are no longer accepted. */
   passwordChangedAt?: number;
+  /** True when the account is seeded and managed by the store-review configuration. */
+  reviewerManaged?: boolean;
+}
+
+/** A hashed password-reset code. Persisted so a deploy/restart cannot invalidate a code already emailed. */
+export interface ResetCodeRecord {
+  email: string;
+  codeHash: string;
+  userPhone: string;
+  expiresAt: number;
+  attempts: number;
+  sends: number;
+  lastSentAt: number;
 }
 
 export interface AppNotification {
@@ -57,6 +70,7 @@ export const orders: Order[] = [];
 
 export const users: Map<string, CustomerUser> = new Map();
 export const otpCodes: Map<string, { code: string; expiresAt: number }> = new Map();
+export const resetCodes: Map<string, ResetCodeRecord> = new Map();
 export const notifications: AppNotification[] = [];
 export const addresses: SavedAddress[] = [];
 
@@ -79,7 +93,7 @@ export async function initializeStore(): Promise<void> {
     return;
   }
 
-  const [storedProducts, storedOrders, storedUsers, storedNotifications, storedAddresses, storedFavorites, storedCarts] = await Promise.all([
+  const [storedProducts, storedOrders, storedUsers, storedNotifications, storedAddresses, storedFavorites, storedCarts, storedResetCodes] = await Promise.all([
     db.collection<Product>('products').find().toArray(),
     db.collection<Order>('orders').find().sort({ createdAt: -1 }).toArray(),
     db.collection<CustomerUser>('users').find().toArray(),
@@ -87,6 +101,7 @@ export async function initializeStore(): Promise<void> {
     db.collection<SavedAddress>('addresses').find().sort({ _id: -1 }).toArray(),
     db.collection<{ phone: string; productIds: string[] }>('favorites').find().toArray(),
     db.collection<{ phone: string; items: { productId: string; qty: number }[] }>('carts').find().toArray(),
+    db.collection<ResetCodeRecord>('reset_codes').find().toArray(),
   ]);
 
   products.clear();
@@ -100,6 +115,8 @@ export async function initializeStore(): Promise<void> {
   for (const fav of storedFavorites) favoritesByPhone.set(normalizePhone(fav.phone), fav.productIds);
   cartsByPhone.clear();
   for (const cart of storedCarts) cartsByPhone.set(normalizePhone(cart.phone), cart.items);
+  resetCodes.clear();
+  for (const entry of storedResetCodes) if (entry?.email) resetCodes.set(entry.email, entry);
 
   if (!storedProducts.length) await db.collection<Product>('products').insertMany([...products.values()]);
   await ensureIndexes(db);
@@ -118,6 +135,7 @@ async function ensureIndexes(db: Db): Promise<void> {
     db.collection('products').createIndex({ id: 1 }, { unique: true }),
     db.collection('favorites').createIndex({ phone: 1 }, { unique: true }),
     db.collection('carts').createIndex({ phone: 1 }, { unique: true }),
+    db.collection('reset_codes').createIndex({ email: 1 }, { unique: true }),
   ]);
   for (const result of results) {
     if (result.status === 'rejected') {
@@ -152,6 +170,7 @@ export async function persistStore(): Promise<void> {
   await syncCollection(db, 'addresses', 'id', addresses);
   await syncCollection(db, 'favorites', 'phone', [...favoritesByPhone.entries()].map(([phone, productIds]) => ({ phone, productIds })));
   await syncCollection(db, 'carts', 'phone', [...cartsByPhone.entries()].map(([phone, items]) => ({ phone, items })));
+  await syncCollection(db, 'reset_codes', 'email', [...resetCodes.values()].filter((entry) => entry.expiresAt > Date.now()));
 }
 
 /** Upsert every document, then delete only keys that are gone from memory. */
@@ -343,6 +362,8 @@ export function upsertUser(user: CustomerUser): CustomerUser {
  * name, email and delivery address on them are anonymised.
  */
 export function deleteUserAccount(phone: string): boolean {
+  const user = users.get(phone);
+  if (user?.email) resetCodes.delete(user.email);
   const existed = users.delete(phone);
   for (let i = addresses.length - 1; i >= 0; i--) if (addresses[i].phone === phone) addresses.splice(i, 1);
   for (let i = notifications.length - 1; i >= 0; i--) if (notifications[i].phone === phone) notifications.splice(i, 1);
@@ -377,6 +398,37 @@ export function findUserByPhone(input: string): CustomerUser | undefined {
   const tail = digits.slice(-9);
   for (const u of users.values()) if (u.phone.replace(/\D/g, '').slice(-9) === tail) return u;
   return undefined;
+}
+
+export function getResetCode(email: string): ResetCodeRecord | undefined {
+  const entry = resetCodes.get(email);
+  if (entry && entry.expiresAt < Date.now()) {
+    resetCodes.delete(email);
+    persistSoon();
+    return undefined;
+  }
+  return entry;
+}
+
+export function setResetCode(entry: ResetCodeRecord): void {
+  resetCodes.set(entry.email, entry);
+  persistSoon();
+}
+
+export function deleteResetCode(email: string): void {
+  if (resetCodes.delete(email)) persistSoon();
+}
+
+export function sweepResetCodes(): void {
+  const now = Date.now();
+  let removed = false;
+  for (const [email, entry] of resetCodes) {
+    if (entry.expiresAt < now) {
+      resetCodes.delete(email);
+      removed = true;
+    }
+  }
+  if (removed) persistSoon();
 }
 
 export function setOtp(phone: string, code: string): void {

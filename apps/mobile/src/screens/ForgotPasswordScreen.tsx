@@ -52,7 +52,7 @@ export default function ForgotPasswordScreen() {
       haptic('success');
     } catch (e) {
       haptic('warning');
-      setError(e instanceof Error ? e.message : t('auth.signUpFailed'));
+      setError(e instanceof Error ? e.message : t('auth.forgotFailed'));
     } finally {
       setBusy(false);
     }
@@ -175,6 +175,21 @@ export default function ForgotPasswordScreen() {
                   <Text style={[styles.createLink, cooldown > 0 && { opacity: 0.5 }]}>
                     {cooldown > 0 ? `${t('auth.resendCode')} (${cooldown}s)` : t('auth.resendCode')}
                   </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    setSent(false);
+                    setCode('');
+                    setPassword('');
+                    setConfirm('');
+                    setCooldown(0);
+                    setError('');
+                  }}
+                  disabled={busy}
+                  style={styles.linkBtn}
+                >
+                  <Text style={styles.createLink}>{t('auth.changeDetails')}</Text>
                 </Pressable>
               </>
             )}

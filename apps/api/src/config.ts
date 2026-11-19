@@ -48,8 +48,8 @@ function parseCorsOrigins(): string[] {
  * are set. It is a normal customer account with no extra privileges, and its orders are forced to cash on
  * delivery so a reviewer can never trigger a real mobile-money charge.
  */
-const reviewerPhone = (process.env.REVIEWER_PHONE ?? '').replace(/\D/g, '');
-const reviewerPassword = process.env.REVIEWER_PASSWORD ?? '';
+const reviewerPhone = cleanEnvValue(process.env.REVIEWER_PHONE).replace(/\D/g, '');
+const reviewerPassword = cleanEnvValue(process.env.REVIEWER_PASSWORD);
 
 export const config = {
   reviewer: reviewerPhone.length >= 9 && reviewerPassword.length >= 8 ? { phone: reviewerPhone, password: reviewerPassword } : null,
@@ -190,6 +190,12 @@ export function assertRuntimeConfig(): void {
     );
   } else {
     console.log(`Email delivery: ${brevoReady ? 'Brevo API (HTTPS)' : 'SMTP ' + config.notify.smtp.host + ':' + config.notify.smtp.port}`);
+  }
+
+  if (Boolean(reviewerPhone) !== Boolean(reviewerPassword)) {
+    console.warn('WARNING: only one of REVIEWER_PHONE / REVIEWER_PASSWORD is set — no store-review account will be created.');
+  } else if (reviewerPhone && !config.reviewer) {
+    console.warn('WARNING: REVIEWER_PHONE / REVIEWER_PASSWORD failed validation (phone needs 9+ digits, password 8+ chars).');
   }
 
   if (problems.length) {

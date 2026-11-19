@@ -1,4 +1,5 @@
 import { EARLY_RETRY_AFTER_MS, type Order, type PaymentAttempt, type PaymentRequest, type PaymentResult } from '@duhahe/shared';
+import { config } from '../config';
 import { orders, saveOrder, updateOrderPaymentStatus } from '../data/store';
 import { getTransaction, paypackReady, requestCashin, PaypackUnavailableError } from './paypackService';
 import {
@@ -36,6 +37,11 @@ export const EARLY_RETRY_MIN_AGE_MS = EARLY_RETRY_AFTER_MS;
 
 function normalizePhone(phone: string): string {
   return String(phone ?? '').replace(/\D/g, '');
+}
+
+function samePhone(a: unknown, b: unknown): boolean {
+  const x = normalizePhone(String(a ?? '')).slice(-9);
+  return x.length === 9 && x === normalizePhone(String(b ?? '')).slice(-9);
 }
 
 function failure(message: PaymentResult['message'], status: PaymentResult['status'] = 'failed', attemptId?: string): PaymentResult {
@@ -145,6 +151,16 @@ async function initiatePaymentLocked(req: PaymentRequest): Promise<PaymentResult
       en: 'This order was cancelled and cannot be paid.',
       kin: 'Iyi sisitemu yahagaritswe ntishobora kwishyurwa.',
       fr: 'Cette commande a été annulée et ne peut pas être payée.',
+    });
+  }
+
+  // Defense in depth: a reviewer order must never reach a payment provider, even if
+  // another route or an old client sends a mobile-money method.
+  if (config.reviewer && samePhone(order.accountPhone, config.reviewer.phone) && req.method !== 'cash_on_delivery') {
+    return failure({
+      en: 'The store-review account can only pay on delivery.',
+      kin: 'Konti y’abasuzuma ikoresha kwishyura bakugezaho gusa.',
+      fr: 'Le compte de test ne peut payer qu’à la livraison.',
     });
   }
 

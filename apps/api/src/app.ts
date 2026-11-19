@@ -9,8 +9,8 @@ import { errorHandler, notFound, requestLogger } from './middleware/errorHandler
 import { apiRateLimit, authRateLimit } from './middleware/rateLimit';
 import { securityHeaders } from './middleware/security';
 import { seedOrders } from './data/seed';
-import { initializeStore, persistStore, getUserByPhone, upsertUser } from './data/store';
-import { hashPassword } from './services/authService';
+import { findUserByPhone, initializeStore, persistStore, upsertUser } from './data/store';
+import { hashPassword, verifyPassword } from './services/authService';
 
 function originAllowed(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
   if (!origin) return callback(null, true); // native apps / curl send no Origin
@@ -32,16 +32,34 @@ function originAllowed(origin: string | undefined, callback: (err: Error | null,
 
 export async function createApp() {
   await initializeStore();
-  if (config.reviewer && !getUserByPhone(config.reviewer.phone)) {
-    upsertUser({
-      id: 'usr-reviewer',
-      name: 'Store Reviewer',
-      phone: config.reviewer.phone,
-      role: 'customer',
-      createdAt: new Date().toISOString(),
-      passwordHash: hashPassword(config.reviewer.password),
-    });
-    console.log('Store-review account ready.');
+  if (config.reviewer) {
+    const existing = findUserByPhone(config.reviewer.phone);
+    if (!existing) {
+      upsertUser({
+        id: 'usr-reviewer',
+        name: 'Store Reviewer',
+        phone: config.reviewer.phone,
+        role: 'customer',
+        createdAt: new Date().toISOString(),
+        passwordHash: hashPassword(config.reviewer.password),
+        reviewerManaged: true,
+      });
+      console.log('Store-review account created.');
+    } else if (existing.reviewerManaged || existing.id === 'usr-reviewer' || existing.name === 'Store Reviewer') {
+      if (!verifyPassword(config.reviewer.password, existing.passwordHash)) {
+        upsertUser({
+          ...existing,
+          passwordHash: hashPassword(config.reviewer.password),
+          passwordChangedAt: Date.now(),
+          reviewerManaged: true,
+        });
+        console.log('Store-review account password repaired from configuration.');
+      }
+    } else {
+      console.warn(
+        'REVIEWER_PHONE belongs to an existing customer account; refusing to take it over. Change REVIEWER_PHONE or verify that account manually.'
+      );
+    }
   }
   if (config.demoMode) {
     seedOrders();

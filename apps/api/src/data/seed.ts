@@ -1,5 +1,5 @@
-import { getProductById, type Customer, type Order, type OrderStatus, type PaymentMethod } from '@duhahe/shared';
-import { orders, products } from './store';
+import { type Customer, type Order, type OrderStatus, type PaymentMethod } from '@duhahe/shared';
+import { getProductById, orders, products } from './store';
 
 const NAMES = [
   { name: 'Jean Bosco Niyonzima', phone: '250788123456' },
@@ -37,7 +37,8 @@ function buildOrder(index: number): Order {
     const key = pick(ids);
     if (used.has(key)) continue;
     used.add(key);
-    const prod = getProductById(key)!;
+    const prod = getProductById(key);
+    if (!prod) continue;
     const qty = Math.round((Math.random() * 3 + prod.minOrderQty) / prod.step) * prod.step;
     items.push({
       productId: prod.id,

@@ -25,6 +25,12 @@ function ordersForCustomer(phone: string) {
     }));
 }
 
+function withoutPasswordHash<T extends { passwordHash?: string }>(user: T): Omit<T, 'passwordHash'> {
+  const { passwordHash, ...safe } = user;
+  void passwordHash;
+  return safe;
+}
+
 export const adminRouter = Router();
 
 adminRouter.post('/auth/login', (req, res) => {
@@ -181,7 +187,7 @@ adminRouter.delete('/inventory/:id', (req, res) => {
 
 adminRouter.get('/customers', (_req, res) => {
   const customers = listCustomers().map((user) => ({
-    ...user,
+    ...withoutPasswordHash(user),
     addresses: listAddressesFor(user.phone),
     orders: ordersForCustomer(user.phone),
   }));
@@ -278,7 +284,7 @@ adminRouter.get('/export', (_req, res) => {
       },
       products: [...products.values()],
       orders: listOrders(),
-      customers: listCustomers(),
+      customers: listCustomers().map(withoutPasswordHash),
       addresses,
       notifications: listAllNotifications(),
       favorites: [...favoritesByPhone.entries()].map(([phone, productIds]) => ({ phone, productIds })),
