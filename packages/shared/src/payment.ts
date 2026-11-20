@@ -1,7 +1,7 @@
 import type { PaymentStatus } from './types';
 
 /** What the payment page is showing. */
-export type PaymentPhase = 'sending' | 'waiting' | 'success' | 'cancelled' | 'unresolved' | 'error';
+export type PaymentPhase = 'sending' | 'waiting' | 'success' | 'cancelled' | 'failed' | 'dismissed' | 'pending' | 'unresolved' | 'error';
 
 /** Response of GET /payments/status/:orderId (the backend is the only source of truth). */
 export interface PaymentSyncResponse {
@@ -18,6 +18,10 @@ export interface PaymentSyncResponse {
   /** The backend could not reach the provider on this check; the real state is unknown. */
   unavailable?: boolean;
   amountMismatch?: boolean;
+  dismissed?: boolean;
+  dismissedAt?: string;
+  /** Provider's own final reason: a cancelled prompt is not the same thing as a declined payment. */
+  cancelReason?: 'cancelled' | 'failed';
 }
 
 /**
@@ -39,17 +43,22 @@ export interface PhaseDecision {
 /**
  * Map one backend status response to the next UI phase.
  *  - success  only when the backend says `paid` (it verified the amount with the provider)
- *  - cancelled only when the backend recorded the provider's final `failed`
- *  - anything else keeps waiting; after UNRESOLVED_AFTER_MS it becomes "unresolved", never "failed"
+ *  - cancelled/failed only when the backend recorded the provider's final answer
+ *  - anything else keeps waiting; after UNRESOLVED_AFTER_MS it becomes "pending", never "failed"
  */
 export function decidePhase(res: PaymentSyncResponse, waitedMs: number): PhaseDecision {
   if (res.status === 'paid') return { phase: 'success', stopPolling: true, degraded: false };
   if (res.status === 'refunded') return { phase: 'success', stopPolling: true, degraded: false };
-  if (res.status === 'failed') return { phase: 'cancelled', stopPolling: true, degraded: false };
+  if (res.status === 'cancelled') return { phase: 'cancelled', stopPolling: true, degraded: false };
+  if (res.status === 'failed') {
+    return { phase: res.cancelReason === 'cancelled' ? 'cancelled' : 'failed', stopPolling: true, degraded: false };
+  }
   if (res.amountMismatch) return { phase: 'unresolved', stopPolling: true, degraded: false };
   if (waitedMs >= UNRESOLVED_AFTER_MS) {
-    return { phase: 'unresolved', stopPolling: true, degraded: !!res.unavailable };
+    return { phase: 'pending', stopPolling: true, degraded: !!res.unavailable };
   }
+  // A closed prompt can still be approved at the provider: keep checking until the timeout.
+  if (res.dismissed) return { phase: 'dismissed', stopPolling: false, degraded: !!res.unavailable };
   return { phase: 'waiting', stopPolling: false, degraded: !!res.unavailable };
 }
 

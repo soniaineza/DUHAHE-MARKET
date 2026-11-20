@@ -36,7 +36,7 @@ export interface CartItem {
 
 export type OrderStatus = 'pending' | 'packing' | 'in_transit' | 'delivered' | 'cancelled';
 export type PaymentMethod = 'mtn_momo' | 'airtel_money' | 'cash_on_delivery';
-export type PaymentStatus = 'unpaid' | 'paid' | 'failed' | 'refunded';
+export type PaymentStatus = 'unpaid' | 'paid' | 'failed' | 'cancelled' | 'refunded';
 
 export interface OrderItem {
   productId: string;
@@ -62,11 +62,12 @@ export interface Customer {
  *  - initiated : created locally, the provider has not (yet) confirmed it exists
  *  - pending   : provider created it and is waiting for the customer
  *  - paid      : provider confirmed success for the exact amount and it settled the order
- *  - failed    : provider confirmed failure (customer cancelled / declined / timed out)
+ *  - cancelled : provider confirmed the customer cancelled/declined the prompt
+ *  - failed    : provider confirmed another final failure (declined / timed out)
  *  - duplicate : provider confirmed success but the order was already paid -> customer charged twice
  *  - mismatch  : provider reported success for the wrong amount; order NOT marked paid
  */
-export type PaymentAttemptStatus = 'initiated' | 'pending' | 'paid' | 'failed' | 'duplicate' | 'mismatch';
+export type PaymentAttemptStatus = 'initiated' | 'pending' | 'paid' | 'cancelled' | 'failed' | 'duplicate' | 'mismatch';
 
 export interface PaymentAttempt {
   id: string;
@@ -85,6 +86,7 @@ export interface PaymentAttempt {
    * is ever approved the money is recorded (and flagged as a duplicate if the order was already paid).
    */
   supersededAt?: string;
+  dismissedAt?: string;
   /** Amount the provider reported when it differs from `amount`. */
   providerAmount?: number;
 }

@@ -7,15 +7,22 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { decidePhase, EARLY_RETRY_AFTER_MS, pollDelayMs, type PaymentMethod, type PaymentPhase, type PaymentSyncResponse } from '@duhahe/shared';
-import { api } from '../api';
+import { ApiAbortedError, ApiTimeoutError, api } from '../api';
 import { useApp } from '../context/AppContext';
 import { fmtRWF } from '../components/Money';
 import Icon, { type IconName } from '../components/Icon';
-import { haptic } from '../components/Toast';
+import { haptic, useToast } from '../components/Toast';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors, fontSizes, radii, shadow } from '../theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+/** The result of one status check, so a no-op (in-flight/screen gone) is never read as "still pending". */
+interface CheckOutcome {
+  ran: boolean;
+  finished: boolean;
+  unavailable: boolean;
+}
 
 const paymentMeta: Record<PaymentMethod, { icon: IconName; tile: readonly [string, string]; note: string; short: string }> = {
   mtn_momo: { icon: 'cellphone', tile: ['#ffcb05', '#f5b800'], note: 'MTN Mobile Money', short: 'MTN MoMo' },
@@ -25,6 +32,7 @@ const paymentMeta: Record<PaymentMethod, { icon: IconName; tile: readonly [strin
 
 export default function PaymentScreen({ route }: { route: RouteProp<RootStackParamList, 'Payment'> }) {
   const { t } = useTranslation();
+  const toast = useToast();
   const { lang } = useApp();
   const nav = useNavigation<Nav>();
   const { order } = route.params;
@@ -40,14 +48,22 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
   const [confirmingRetry, setConfirmingRetry] = useState(false);
   const [earlyNote, setEarlyNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const [confirmDismiss, setConfirmDismiss] = useState(false);
+  const [dismissing, setDismissing] = useState(false);
+  const dismissingRef = useRef(false);
   const pulse = useRef(new Animated.Value(1)).current;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startedAt = useRef<number>(Date.now());
   const checking = useRef(false);
   const alive = useRef(true);
   const phaseRef = useRef<PaymentPhase>('sending');
-  /** The payment attempt this page is currently watching. Answers about any other attempt are ignored. */
   const attemptRef = useRef<string | undefined>(undefined);
+  const dismissSentRef = useRef(false);
+  const askDismissOnResumeRef = useRef(false);
+  const resumeRef = useRef(false);
+  const unavailableRef = useRef(false);
 
   const goto = (p: PaymentPhase) => {
     phaseRef.current = p;
@@ -61,34 +77,48 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
     }
   };
 
+  /** Apply one authoritative backend answer. Frontend actions alone never settle a payment. */
+  const applyStatus = (res: PaymentSyncResponse): CheckOutcome => {
+    if (res.providerReference) setReference(res.providerReference);
+    unavailableRef.current = !!res.unavailable;
+    const since = res.requestedAt ? Date.parse(res.requestedAt) : NaN;
+    const waited = Date.now() - (Number.isFinite(since) ? since : startedAt.current);
+    const decision = resumeRef.current && res.dismissed ? { ...res, dismissed: false } : res;
+    const d = decidePhase(decision, waited);
+    setDegraded(d.degraded);
+    setSlow(waited > 45_000);
+    setWaitedMs(waited);
+    if (d.phase === 'success') haptic('success');
+    if (d.phase === 'cancelled' || d.phase === 'failed') haptic('error');
+    goto(d.phase);
+    if (d.stopPolling) stopPolling();
+    return { ran: true, finished: d.stopPolling, unavailable: !!res.unavailable };
+  };
+
   /** One status check. The backend (which talks to the provider) is the only source of truth. */
-  const checkOnce = useCallback(async (): Promise<boolean> => {
-    if (checking.current || !alive.current) return false;
+  const checkOnce = useCallback(async (): Promise<CheckOutcome> => {
+    if (checking.current || !alive.current) {
+      return { ran: false, finished: false, unavailable: unavailableRef.current };
+    }
     checking.current = true;
     try {
       let res: PaymentSyncResponse;
       try {
-        res = await api.paymentStatus(order.id, attemptRef.current);
-      } catch {
-        // Offline / server unreachable: the real state is unknown, so keep waiting - never fail.
+        res = await api.paymentStatus(order.id, attemptRef.current, { signal: abortRef.current?.signal });
+      } catch (err) {
+        if (err instanceof ApiAbortedError || !alive.current) {
+          return { ran: false, finished: false, unavailable: true };
+        }
+        // Offline, unreachable or timed out: the real state is unknown, so keep waiting - never fail.
         res = { status: 'unpaid', unavailable: true };
       }
-      if (!alive.current) return false;
+      if (!alive.current) return { ran: false, finished: false, unavailable: true };
       // A late answer for an earlier attempt (e.g. the one that was just cancelled) must never
       // be shown as the result of the attempt we are watching now.
-      if (res.attemptId && attemptRef.current && res.attemptId !== attemptRef.current) return false;
-      if (res.providerReference) setReference(res.providerReference);
-      const since = res.requestedAt ? Date.parse(res.requestedAt) : NaN;
-      const waited = Date.now() - (Number.isFinite(since) ? since : startedAt.current);
-      const d = decidePhase(res, waited);
-      setDegraded(d.degraded);
-      setSlow(waited > 45_000);
-      setWaitedMs(waited);
-      if (d.phase === 'success') haptic('success');
-      if (d.phase === 'cancelled') haptic('error');
-      goto(d.phase);
-      if (d.stopPolling) stopPolling();
-      return d.stopPolling;
+      if (res.attemptId && attemptRef.current && res.attemptId !== attemptRef.current) {
+        return { ran: false, finished: false, unavailable: !!res.unavailable };
+      }
+      return applyStatus(res);
     } finally {
       checking.current = false;
     }
@@ -98,8 +128,8 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
     stopPolling();
     const waited = Date.now() - startedAt.current;
     timer.current = setTimeout(async () => {
-      const finished = await checkOnce();
-      if (!finished && alive.current) schedule();
+      const outcome = await checkOnce();
+      if (!outcome.finished && alive.current) schedule();
     }, pollDelayMs(waited));
   }, [checkOnce]);
 
@@ -115,12 +145,17 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
    * one is still pending, so reloading this page or tapping Try again too early is harmless.
    */
   const processPayment = async (supersedeAttemptId?: string) => {
-    if (busy) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     setCheckNote(false);
     setEarlyNote(null);
     setConfirmingRetry(false);
+    setConfirmDismiss(false);
+    dismissSentRef.current = false;
+    resumeRef.current = false;
+    askDismissOnResumeRef.current = false;
     const previousAttempt = attemptRef.current;
     if (supersedeAttemptId) stopPolling();
     goto('sending');
@@ -128,13 +163,16 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
     attemptRef.current = undefined;
     setReference('');
     try {
-      const result = await api.createPayment({
-        method: order.paymentMethod,
-        orderId: order.id,
-        phone: order.customer.phone,
-        amount: order.total,
-        supersedeAttemptId,
-      });
+      const result = await api.createPayment(
+        {
+          method: order.paymentMethod,
+          orderId: order.id,
+          phone: order.customer.phone,
+          amount: order.total,
+          supersedeAttemptId,
+        },
+        { signal: abortRef.current?.signal }
+      );
       if (!result.success && supersedeAttemptId) {
         // The server declined the early retry (too soon, already used, provider unreachable...). The old request is
         // still the one being watched, so go back to waiting on it and say why.
@@ -159,18 +197,80 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
         watch();
       }
     } catch (e) {
+      if (e instanceof ApiAbortedError || !alive.current) return;
+      if (e instanceof ApiTimeoutError) {
+        // The prompt may already be on the phone. Ask the backend which attempt is live instead of
+        // sending a second request; this also restores the provider reference we lost with the answer.
+        try {
+          const status = await api.paymentStatus(order.id, undefined, { signal: abortRef.current?.signal });
+          if (status.attemptId) {
+            attemptRef.current = status.attemptId;
+            const outcome = applyStatus(status);
+            if (!outcome.finished && alive.current) schedule();
+            return;
+          }
+        } catch {
+          // fall through to the error state; the backend is authoritative about whether a charge exists
+        }
+      }
       setError(e instanceof Error ? e.message : null);
       goto('error');
       haptic('error');
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
 
   const recheck = async () => {
     setCheckNote(false);
-    const finished = await checkOnce();
-    if (!finished && phaseRef.current === 'unresolved') setCheckNote(true);
+    const outcome = await checkOnce();
+    if (!outcome.ran || !alive.current || outcome.finished) return;
+    if (phaseRef.current === 'unresolved' || phaseRef.current === 'pending' || phaseRef.current === 'dismissed') setCheckNote(true);
+    if (phaseRef.current === 'dismissed') schedule();
+  };
+
+  const sendDismissal = useCallback(async (attemptId?: string): Promise<PaymentSyncResponse | null> => {
+    if (dismissSentRef.current) return null;
+    dismissSentRef.current = true;
+    try {
+      return await api.dismissPayment(order.id, attemptId ?? attemptRef.current);
+    } catch {
+      dismissSentRef.current = false;
+      return null;
+    }
+  }, [order.id]);
+
+  const closeRequest = async () => {
+    if (dismissing || dismissingRef.current) return;
+    dismissingRef.current = true;
+    setDismissing(true);
+    const res = await sendDismissal();
+    dismissingRef.current = false;
+    if (!alive.current) return;
+    setDismissing(false);
+    setConfirmDismiss(false);
+    if (!res) {
+      toast.show(t('payment.dismissFailed'), 'info');
+      if (alive.current && phaseRef.current === 'waiting') schedule();
+      return;
+    }
+    const outcome = applyStatus(res);
+    if (outcome.finished) {
+      // Provider gave a final answer: the spinner is gone and the result (with its reference) stays on screen.
+      return;
+    }
+    // Provider still says pending. Show a clear pending state and keep verifying with a bounded timeout.
+    haptic('warning');
+    toast.show(t('payment.dismissedToast'), 'info');
+    if (alive.current) schedule();
+  };
+
+  const resumeWaiting = () => {
+    resumeRef.current = true;
+    askDismissOnResumeRef.current = true;
+    setConfirmDismiss(false);
+    watch();
   };
 
   useEffect(() => {
@@ -181,19 +281,44 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
         alive.current = false;
       };
     }
+    abortRef.current = new AbortController();
     const start = setTimeout(processPayment, 400);
-    // Check immediately when the customer returns from the MoMo prompt / the tab or network comes back.
+    // Returning from the MoMo prompt, the home screen or a lost network is the only signal we get that
+    // the customer may have cancelled: check the provider before changing anything.
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && phaseRef.current === 'waiting') void checkOnce();
+      if (state !== 'active' || !alive.current) return;
+      const wasWaiting = phaseRef.current === 'waiting';
+      if (!wasWaiting && phaseRef.current !== 'dismissed' && phaseRef.current !== 'unresolved') return;
+      void checkOnce().then((outcome) => {
+        if (!alive.current || !outcome.ran || outcome.finished) return;
+        if (wasWaiting && !outcome.unavailable && !askDismissOnResumeRef.current) {
+          askDismissOnResumeRef.current = true;
+          setConfirmDismiss(true);
+        } else if (!wasWaiting) {
+          schedule();
+        }
+      });
     });
     return () => {
       alive.current = false;
       clearTimeout(start);
       stopPolling();
+      abortRef.current?.abort();
+      abortRef.current = null;
       sub.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const sub = nav.addListener('beforeRemove', () => {
+      const current = phaseRef.current;
+      if (current === 'success' || current === 'cancelled' || current === 'failed' || current === 'dismissed' || current === 'unresolved' || current === 'pending' || current === 'error') return;
+      stopPolling();
+      void sendDismissal();
+    });
+    return sub;
+  }, [nav, sendDismissal]);
 
   useEffect(() => {
     if (phase === 'sending' || phase === 'waiting') {
@@ -285,6 +410,60 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
               </View>
               <Text style={styles.resultTitle}>{t('payment.cancelledTitle')}</Text>
               <Text style={styles.resultSub}>{t('payment.cancelledSub')}</Text>
+              {reference ? (
+                <View style={styles.refRow}>
+                  <Text style={styles.refLabel}>{t('payment.reference')}</Text>
+                  <Text style={styles.refValue}>{reference}</Text>
+                </View>
+              ) : null}
+            </View>
+          )}
+
+          {phase === 'failed' && (
+            <View style={styles.result}>
+              <View style={[styles.checkCircle, { backgroundColor: colors.dangerSoft }]}>
+                <Icon name="close-circle" size={34} color={colors.danger} />
+              </View>
+              <Text style={styles.resultTitle}>{t('payment.failedTitle')}</Text>
+              <Text style={styles.resultSub}>{t('payment.failedSub')}</Text>
+              {reference ? (
+                <View style={styles.refRow}>
+                  <Text style={styles.refLabel}>{t('payment.reference')}</Text>
+                  <Text style={styles.refValue}>{reference}</Text>
+                </View>
+              ) : null}
+            </View>
+          )}
+
+          {phase === 'pending' && (
+            <View style={styles.result}>
+              <View style={[styles.checkCircle, { backgroundColor: colors.accentSoft }]}>
+                <Icon name="help-circle-outline" size={36} color={colors.accentDark} />
+              </View>
+              <Text style={styles.resultTitle}>{t('payment.pendingTitle')}</Text>
+              <Text style={styles.resultSub}>{t('payment.pendingSub')}</Text>
+              {reference ? (
+                <View style={styles.refRow}>
+                  <Text style={styles.refLabel}>{t('payment.reference')}</Text>
+                  <Text style={styles.refValue}>{reference}</Text>
+                </View>
+              ) : null}
+            </View>
+          )}
+
+          {phase === 'dismissed' && (
+            <View style={styles.result}>
+              <View style={[styles.checkCircle, { backgroundColor: colors.accentSoft }]}>
+                <Icon name="information" size={34} color={colors.accentDark} />
+              </View>
+              <Text style={styles.resultTitle}>{t('payment.dismissedTitle')}</Text>
+              <Text style={styles.resultSub}>{t('payment.dismissedSub')}</Text>
+              {reference ? (
+                <View style={styles.refRow}>
+                  <Text style={styles.refLabel}>{t('payment.reference')}</Text>
+                  <Text style={styles.refValue}>{reference}</Text>
+                </View>
+              ) : null}
             </View>
           )}
 
@@ -296,6 +475,12 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
               <Text style={styles.resultTitle}>{t('payment.unresolvedTitle')}</Text>
               <Text style={styles.resultSub}>{t('payment.unresolvedSub')}</Text>
               {checkNote ? <Text style={[styles.resultSub, styles.warnNote]}>{t('payment.stillPending')}</Text> : null}
+              {reference ? (
+                <View style={styles.refRow}>
+                  <Text style={styles.refLabel}>{t('payment.reference')}</Text>
+                  <Text style={styles.refValue}>{reference}</Text>
+                </View>
+              ) : null}
             </View>
           )}
 
@@ -322,7 +507,7 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
           </View>
         )}
 
-        {(phase === 'cancelled' || phase === 'error') && (
+        {(phase === 'cancelled' || phase === 'failed' || phase === 'error') && (
           <View style={styles.actions}>
             <Pressable onPress={() => processPayment()} disabled={busy} style={({ pressed }) => [styles.primaryBtn, (pressed || busy) && styles.pressed]}>
               <Icon name="refresh" size={18} color="#fff" />
@@ -334,7 +519,7 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
           </View>
         )}
 
-        {phase === 'unresolved' && (
+        {(phase === 'unresolved' || phase === 'pending') && (
           <View style={styles.actions}>
             <Pressable onPress={recheck} style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}>
               <Icon name="refresh" size={18} color="#fff" />
@@ -344,6 +529,35 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
               <Text style={styles.secondaryText}>{t('success.track')}</Text>
             </Pressable>
           </View>
+        )}
+
+        {phase === 'dismissed' && (
+          <View style={styles.actions}>
+            <Pressable onPress={recheck} style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}>
+              <Icon name="refresh" size={18} color="#fff" />
+              <Text style={styles.primaryText}>{t('payment.checkAgain')}</Text>
+            </Pressable>
+            <Pressable onPress={resumeWaiting} style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}>
+              <Text style={styles.secondaryText}>{t('payment.dismissNo')}</Text>
+            </Pressable>
+            <Pressable onPress={trackOrder} style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}>
+              <Text style={styles.secondaryText}>{t('success.track')}</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {(phase === 'dismissed' || phase === 'pending') && waitedMs >= EARLY_RETRY_AFTER_MS && attemptRef.current && (
+          <Pressable onPress={() => processPayment(attemptRef.current)} disabled={busy} style={({ pressed }) => [styles.outlineBtn, (pressed || busy) && styles.pressed]}>
+            <Icon name="refresh" size={18} color={colors.ink} />
+            <Text style={styles.outlineText}>{t('payment.earlyRetryButton')}</Text>
+          </Pressable>
+        )}
+
+        {phase === 'waiting' && attemptRef.current && !confirmDismiss && !confirmingRetry && (
+          <Pressable onPress={() => setConfirmDismiss(true)} style={({ pressed }) => [styles.outlineBtn, pressed && styles.pressed]}>
+            <Icon name="phone-cancel" size={18} color={colors.ink} />
+            <Text style={styles.outlineText}>{t('payment.dismissAction')}</Text>
+          </Pressable>
         )}
 
         {phase === 'waiting' && waitedMs >= EARLY_RETRY_AFTER_MS && attemptRef.current && !confirmingRetry && (
@@ -363,6 +577,26 @@ export default function PaymentScreen({ route }: { route: RouteProp<RootStackPar
             </Pressable>
             <Pressable onPress={() => setConfirmingRetry(false)} style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}>
               <Text style={styles.secondaryText}>{t('payment.earlyRetryNo')}</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {phase === 'waiting' && confirmDismiss && (
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>{t('payment.dismissTitle')}</Text>
+            <Text style={styles.confirmText}>{t('payment.dismissWarn')}</Text>
+            <Pressable onPress={closeRequest} disabled={dismissing || busy} style={({ pressed }) => [styles.primaryBtn, (pressed || dismissing || busy) && styles.pressed]}>
+              <Icon name="close-circle" size={18} color="#fff" />
+              <Text style={styles.primaryText}>{t('payment.dismissYes')}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                askDismissOnResumeRef.current = true;
+                setConfirmDismiss(false);
+              }}
+              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
+            >
+              <Text style={styles.secondaryText}>{t('payment.dismissNo')}</Text>
             </Pressable>
           </View>
         )}

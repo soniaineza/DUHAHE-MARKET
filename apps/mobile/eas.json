@@ -8,6 +8,15 @@
       "developmentClient": true,
       "distribution": "internal"
     },
+    "simulator": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://duhahe-market-1.onrender.com/api"
+      }
+    },
     "preview": {
       "distribution": "internal",
       "android": {

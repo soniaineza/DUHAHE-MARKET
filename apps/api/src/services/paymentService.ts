@@ -106,7 +106,7 @@ function watchedAttempts(order: Order): PaymentAttempt[] {
   return (order.paymentAttempts ?? []).filter((a) => {
     if (!a.ref) return false;
     if (!isTerminal(a)) return true; // still open at the provider
-    if (a.status !== 'failed') return false;
+    if (a.status !== 'failed' && a.status !== 'cancelled') return false;
     const settled = Date.parse(a.settledAt ?? a.createdAt);
     if (now - settled > FAILED_WATCH_MS) return false;
     return (a === latest && order.paymentStatus !== 'paid') || now - (lastChecked.get(a.id) ?? 0) >= RECHECK_FAILED_MS;
@@ -123,7 +123,7 @@ export async function reconcileOrder(order: Order): Promise<{ unavailable: boole
     try {
       const tx = await getTransaction(attempt.ref!);
       lastChecked.set(attempt.id, Date.now());
-      if (tx) applyProviderOutcome(order, attempt, { status: tx.status, amount: tx.amount });
+      if (tx) applyProviderOutcome(order, attempt, { status: tx.status, amount: tx.amount, reason: tx.reason });
     } catch (err) {
       if (err instanceof PaypackUnavailableError) unavailable = true;
       else throw err;
@@ -316,6 +316,13 @@ export interface PaymentSyncResult {
   amountMismatch?: boolean;
   /** Provider could not be reached on this check; the true state is unknown (never treated as failed). */
   unavailable?: boolean;
+  dismissed?: boolean;
+  dismissedAt?: string;
+  cancelReason?: 'cancelled' | 'failed';
+}
+
+export interface PaymentDismissResult extends PaymentSyncResult {
+  dismissed: boolean;
 }
 
 /**
@@ -331,36 +338,70 @@ export async function syncOrderPayment(orderId: string, attemptId?: string): Pro
   let unavailable = false;
   if (paypackReady()) ({ unavailable } = await reconcileOrder(order));
 
-  const attempt = findAttempt(order, attemptId) ?? currentAttempt(order);
+  return buildSyncResult(order, findAttempt(order, attemptId) ?? currentAttempt(order), unavailable);
+}
+
+function buildSyncResult(order: Order, attempt: PaymentAttempt | undefined, unavailable: boolean): PaymentSyncResult {
   const base: PaymentSyncResult = {
     status: order.paymentStatus,
     attemptId: attempt?.id,
     providerReference: attempt?.ref ?? order.providerReference,
     requestedAt: attempt?.createdAt,
     ...(unavailable ? { unavailable: true } : {}),
+    ...(attempt?.dismissedAt ? { dismissedAt: attempt.dismissedAt, dismissed: !unavailable } : {}),
   };
   if (!attempt) return base;
   if (order.paymentStatus === 'paid' || order.paymentStatus === 'refunded') return base;
 
   switch (attempt.status) {
+    case 'cancelled':
+      return { ...base, status: 'cancelled', providerStatus: 'failed', cancelReason: 'cancelled' };
     case 'failed':
-      return { ...base, status: 'failed', providerStatus: 'failed' };
+      return { ...base, status: 'failed', providerStatus: 'failed', cancelReason: 'failed' };
     case 'mismatch':
       return { ...base, status: 'unpaid', providerStatus: 'successful', amountMismatch: true, amount: attempt.providerAmount };
     case 'paid':
     case 'duplicate':
       return { ...base, status: 'paid', providerStatus: 'successful' };
     default:
-      // pending / initiated: this attempt is still open. Report it as such, whatever older attempts did.
       return { ...base, status: 'unpaid', providerStatus: 'pending' };
   }
+}
+
+export async function dismissPayment(orderId: string, attemptId?: string): Promise<PaymentDismissResult | null> {
+  const order = orders.find((o) => o.id === orderId);
+  if (!order) return null;
+  return withOrderLock(order.id, () => dismissPaymentLocked(order, attemptId));
+}
+
+async function dismissPaymentLocked(order: Order, attemptId?: string): Promise<PaymentDismissResult> {
+  ensureLegacyAttempt(order);
+  const attempt = findAttempt(order, attemptId) ?? currentAttempt(order);
+  if (!attempt) {
+    return { dismissed: false, status: order.paymentStatus, providerReference: order.providerReference };
+  }
+
+  let unavailable = false;
+  if (paypackReady()) ({ unavailable } = await reconcileOrder(order));
+
+  const result = buildSyncResult(order, attempt, unavailable);
+  if (!unavailable && (result.status === 'paid' || result.status === 'refunded' || result.status === 'failed' || result.status === 'cancelled' || result.amountMismatch)) {
+    return { ...result, dismissed: false };
+  }
+
+  if (!attempt.dismissedAt) {
+    attempt.dismissedAt = new Date().toISOString();
+    saveOrder(order);
+  }
+  const updated = buildSyncResult(order, attempt, unavailable);
+  return { ...updated, dismissed: !unavailable && updated.status === 'unpaid' && !updated.amountMismatch };
 }
 
 /** Orders with an attempt still open (or recently failed) - what the background reconciler re-checks. */
 export function ordersWithOpenAttempts(maxAgeMs = FAILED_WATCH_MS): Order[] {
   const cutoff = Date.now() - maxAgeMs;
   orders.forEach((o) => ensureLegacyAttempt(o, false));
-  return orders.filter((o) => (o.paymentAttempts ?? []).some((a) => a.ref && (!isTerminal(a) || a.status === 'failed') && Date.parse(a.settledAt ?? a.createdAt) > cutoff));
+  return orders.filter((o) => (o.paymentAttempts ?? []).some((a) => a.ref && (!isTerminal(a) || a.status === 'failed' || a.status === 'cancelled') && Date.parse(a.settledAt ?? a.createdAt) > cutoff));
 }
 
 let reconcilerTimer: ReturnType<typeof setInterval> | null = null;

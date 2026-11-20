@@ -5,7 +5,7 @@ import type { Request, Response } from 'express';
 import { canonicalRwandaPhone, isStrongPassword, isValidEmail, normalizeEmail, normalizeProvince, provinceOfDistrict, type PaymentMethod } from '@duhahe/shared';
 import { emailAvailable, sendEmail, sendSms, smsAvailable } from '../services/notify';
 import { calculateOrder, createOrderFromInput, getOrderById, listOrders } from '../services/orderService';
-import { initiatePayment, syncOrderPayment } from '../services/paymentService';
+import { dismissPayment, initiatePayment, syncOrderPayment } from '../services/paymentService';
 import { codeSendRateLimit, trackRateLimit } from '../middleware/rateLimit';
 import { signCustomerToken, verifyCustomerToken, revokeToken, hashPassword, verifyPassword } from '../services/authService';
 import {
@@ -676,5 +676,29 @@ customerRouter.get('/payments/status/:orderId', async (req, res) => {
     res.json({ data: result });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Payment status check failed' });
+  }
+});
+
+customerRouter.post('/payments/dismiss', async (req, res) => {
+  const accountPhone = requireCustomer(req, res);
+  if (!accountPhone) return;
+  const { orderId, attemptId } = req.body ?? {};
+  if (!orderId) {
+    res.status(400).json({ error: 'orderId is required' });
+    return;
+  }
+  if (!ownsOrder(getOrderById(String(orderId)), accountPhone)) {
+    res.status(404).json({ error: 'Order not found' });
+    return;
+  }
+  try {
+    const result = await dismissPayment(String(orderId), typeof attemptId === 'string' && attemptId ? attemptId : undefined);
+    if (!result) {
+      res.status(404).json({ error: 'Payment attempt not found' });
+      return;
+    }
+    res.json({ data: result });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Could not close payment request' });
   }
 });

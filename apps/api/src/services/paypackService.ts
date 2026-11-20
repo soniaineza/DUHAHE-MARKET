@@ -128,10 +128,13 @@ export type PaypackTransaction = {
   amount: number;
   client: string;
   processedAt?: string;
+  /** The provider's own status word, kept so a cancelled prompt can be reported as CANCELLED. */
+  rawStatus?: string;
+  reason?: 'cancelled' | 'failed';
 };
 
 /** Providers report a handful of spellings; fold them onto our three states. */
-function normalizeStatus(raw: unknown): PaypackTransaction['status'] | null {
+export function normalizeStatus(raw: unknown): PaypackTransaction['status'] | null {
   const status = String(raw ?? '').toLowerCase();
   if (status === 'successful' || status === 'successfull' || status === 'success') return 'successful';
   if (status === 'failed' || status === 'cancelled' || status === 'canceled' || status === 'rejected') return 'failed';
@@ -141,7 +144,13 @@ function normalizeStatus(raw: unknown): PaypackTransaction['status'] | null {
 
 const RANK: Record<PaypackTransaction['status'], number> = { pending: 0, failed: 1, successful: 2 };
 
-function toTransaction(d: any, ref: string, status: PaypackTransaction['status']): PaypackTransaction {
+/** Paypack folds cancellations into "failed"; keep the reason so the app can show the right state. */
+export function providerFailureReason(raw: unknown): 'cancelled' | 'failed' {
+  const status = String(raw ?? '').toLowerCase();
+  return status === 'cancelled' || status === 'canceled' || status === 'rejected' ? 'cancelled' : 'failed';
+}
+
+function toTransaction(d: any, ref: string, status: PaypackTransaction['status'], rawStatus?: string): PaypackTransaction {
   return {
     ref: String(d?.ref ?? ref),
     kind: d?.kind === 'CASHOUT' ? 'CASHOUT' : 'CASHIN',
@@ -149,6 +158,8 @@ function toTransaction(d: any, ref: string, status: PaypackTransaction['status']
     amount: Number(d?.amount ?? 0),
     client: String(d?.client ?? ''),
     processedAt: d?.processed_at ? String(d.processed_at) : undefined,
+    rawStatus,
+    ...(status === 'failed' ? { reason: providerFailureReason(rawStatus) } : {}),
   };
 }
 
@@ -173,17 +184,20 @@ export async function getTransaction(ref: string): Promise<PaypackTransaction | 
     throw new PaypackUnavailableError(err instanceof Error ? err.message : undefined);
   }
 
-  let best: PaypackTransaction | null = null;
+  const candidates: PaypackTransaction[] = [];
   let answered = false;
+  let cancelled = false;
   const consider = (tx: PaypackTransaction | null) => {
-    if (tx && (!best || RANK[tx.status] > RANK[best.status])) best = tx;
+    if (!tx) return;
+    if (tx.reason === 'cancelled') cancelled = true;
+    candidates.push(tx);
   };
 
   try {
     const data = await request('GET', `/transactions/find/${encodeURIComponent(ref)}`, {}, token);
     answered = true;
     const status = normalizeStatus(data?.status);
-    if (status) consider(toTransaction(data, ref, status));
+    if (status) consider(toTransaction(data, ref, status, data?.status));
   } catch (err) {
     const status = (err as { status?: number })?.status;
     if (status === 404) answered = true; // reachable, just no record on this path
@@ -197,13 +211,16 @@ export async function getTransaction(ref: string): Promise<PaypackTransaction | 
     for (const row of rows) {
       const d = row?.data ?? row ?? {};
       const status = normalizeStatus(d.status);
-      if (status) consider(toTransaction(d, ref, status));
+      if (status) consider(toTransaction(d, ref, status, d.status));
     }
   } catch (err) {
     if ((err as { status?: number })?.status === 401) clearPaypackToken();
   }
 
   if (!answered) throw new PaypackUnavailableError();
+  if (!candidates.length) return null;
+  const best = candidates.reduce((a, b) => (RANK[b.status] > RANK[a.status] ? b : a));
+  if (best.status === 'failed') best.reason = cancelled ? 'cancelled' : best.reason ?? 'failed';
   return best;
 }
 

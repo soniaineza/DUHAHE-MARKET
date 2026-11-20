@@ -52,6 +52,19 @@ services:
         sync: false
       - key: AT_SENDER_ID
         sync: false
+      # Paypack mobile money (MTN MoMo / Airtel Money). Set real values in the Render dashboard.
+      - key: PAYPACK_ENABLED
+        sync: false
+      - key: PAYPACK_BASE_URL
+        value: https://payments.paypack.rw/api
+      - key: PAYPACK_CLIENT_ID
+        sync: false
+      - key: PAYPACK_CLIENT_SECRET
+        sync: false
+      - key: PAYPACK_WEBHOOK_SIGN_KEY
+        sync: false
+      - key: PAYPACK_WEBHOOK_MODE
+        value: production
       # Store-review (Apple/Google) login. Set both values in the Render dashboard; leave unset to disable.
       - key: REVIEWER_PHONE
         sync: false

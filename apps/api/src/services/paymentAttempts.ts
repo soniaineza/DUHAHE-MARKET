@@ -12,7 +12,7 @@ import { orders, pushNotification, saveOrder, updateOrderPaymentStatus } from '.
  * so the webhook, the status poll and the retry gate cannot disagree.
  */
 
-const TERMINAL: ReadonlySet<PaymentAttemptStatus> = new Set(['paid', 'failed', 'duplicate', 'mismatch']);
+const TERMINAL: ReadonlySet<PaymentAttemptStatus> = new Set(['paid', 'cancelled', 'failed', 'duplicate', 'mismatch']);
 export const isTerminal = (a: PaymentAttempt) => TERMINAL.has(a.status);
 
 export function roundMoney(value: number): number {
@@ -36,7 +36,13 @@ export function amountSettles(expected: number, reported: unknown): boolean {
 export function ensureLegacyAttempt(order: Order, persist = true): void {
   if (order.paymentAttempts?.length || !order.providerReference) return;
   const settled = order.paymentStatus === 'paid' || order.paymentStatus === 'refunded';
-  const status: PaymentAttemptStatus = settled ? 'paid' : order.paymentStatus === 'failed' ? 'failed' : 'pending';
+  const status: PaymentAttemptStatus = settled
+    ? 'paid'
+    : order.paymentStatus === 'cancelled'
+      ? 'cancelled'
+      : order.paymentStatus === 'failed'
+        ? 'failed'
+        : 'pending';
   order.paymentAttempts = [
     {
       id: `legacy-${order.providerReference.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12)}`,
@@ -113,6 +119,8 @@ export type OutcomeEffect =
 export interface ProviderOutcome {
   status: 'pending' | 'successful' | 'failed';
   amount?: number;
+  /** Only a provider answer may set this; a customer closing the prompt never does. */
+  reason?: 'cancelled' | 'failed';
 }
 
 function notifyPaid(order: Order): void {
@@ -144,12 +152,13 @@ export function applyProviderOutcome(order: Order, attempt: PaymentAttempt, outc
   if (outcome.status === 'failed') {
     // Never downgrade an attempt that already holds money (paid / duplicate / mismatch) or is already failed.
     if (attempt.status !== 'pending' && attempt.status !== 'initiated') return 'noop';
-    attempt.status = 'failed';
+    const finalStatus: PaymentAttemptStatus = outcome.reason === 'cancelled' ? 'cancelled' : 'failed';
+    attempt.status = finalStatus;
     attempt.settledAt = now;
-    // Only the attempt that is currently live may mark the ORDER failed. A late "failed" for an
-    // earlier attempt must not touch a newer attempt that is still pending, and never a paid order.
+    // Only the attempt that is currently live may settle the ORDER. A late failure for an earlier
+    // attempt must not touch a newer attempt that is still pending, and never a paid order.
     if (order.paymentStatus !== 'paid' && currentAttempt(order)?.id === attempt.id) {
-      updateOrderPaymentStatus(order.id, 'failed');
+      updateOrderPaymentStatus(order.id, finalStatus);
     }
     saveOrder(order);
     return 'failed';

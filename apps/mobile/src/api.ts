@@ -42,12 +42,62 @@ interface Envelope<T> {
   data: T;
 }
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, { headers: authHeaders() });
-  checkUnauthorized(res);
-  if (!res.ok) throw new Error(`Request failed (${res.status})`);
-  const body = (await res.json()) as Envelope<T>;
-  return body.data;
+/** A request that took too long. The outcome is unknown: never turn this into a payment failure. */
+export class ApiTimeoutError extends Error {
+  constructor() {
+    super('The request timed out');
+    this.name = 'ApiTimeoutError';
+  }
+}
+
+/** A request cancelled by its owner (for example the payment screen being removed). */
+export class ApiAbortedError extends Error {
+  constructor() {
+    super('The request was cancelled');
+    this.name = 'ApiAbortedError';
+  }
+}
+
+export interface RequestOptions {
+  /** Signal owned by the caller, so unmounting a screen can cancel its in-flight requests. */
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
+const DEFAULT_TIMEOUT_MS = 20_000;
+
+async function request<T>(path: string, init: RequestInit, { signal, timeoutMs = DEFAULT_TIMEOUT_MS }: RequestOptions = {}): Promise<T> {
+  const controller = new AbortController();
+  let abortedByCaller = !!signal?.aborted;
+  const onAbort = () => {
+    abortedByCaller = true;
+    controller.abort();
+  };
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener('abort', onAbort);
+  }
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${BASE_URL}${path}`, { ...init, signal: controller.signal });
+    checkUnauthorized(res);
+    const body = (await res.json()) as Envelope<T> & { error?: string };
+    if (!res.ok || body.error) throw new Error(body.error ?? `Request failed (${res.status})`);
+    return body.data;
+  } catch (err) {
+    if (controller.signal.aborted) {
+      if (abortedByCaller || signal?.aborted) throw new ApiAbortedError();
+      throw new ApiTimeoutError();
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+async function get<T>(path: string, options?: RequestOptions): Promise<T> {
+  return request<T>(path, { headers: authHeaders() }, options);
 }
 
 async function authGet<T>(path: string, token: string): Promise<T> {
@@ -59,18 +109,16 @@ async function authGet<T>(path: string, token: string): Promise<T> {
   return body.data;
 }
 
-async function post<T>(path: string, payload: unknown): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: 'POST',
-    headers: authHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify(payload),
-  });
-  checkUnauthorized(res);
-  const body = await res.json();
-  if (!res.ok || body.error) {
-    throw new Error(body.error ?? `Request failed (${res.status})`);
-  }
-  return body.data as T;
+async function post<T>(path: string, payload: unknown, options?: RequestOptions): Promise<T> {
+  return request<T>(
+    path,
+    {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+    },
+    options
+  );
 }
 
 async function put<T>(path: string, payload: unknown): Promise<T> {
@@ -134,20 +182,28 @@ export const api = {
   trackOrder: (orderNumber: string, phone: string) =>
     get<Order>(`/orders/track?orderNumber=${encodeURIComponent(orderNumber)}&phone=${encodeURIComponent(phone)}`),
 
-  createPayment: (payload: {
-    method: 'mtn_momo' | 'airtel_money' | 'cash_on_delivery';
-    orderId: string;
-    phone: string;
-    amount: number;
-    /** Customer-confirmed early retry ("I cancelled attempt <id> on my phone"); the server re-checks the provider first. */
-    supersedeAttemptId?: string;
-  }) => post<PaymentResult>('/payments/create', payload),
+  createPayment: (
+    payload: {
+      method: 'mtn_momo' | 'airtel_money' | 'cash_on_delivery';
+      orderId: string;
+      phone: string;
+      amount: number;
+      /** Customer-confirmed early retry ("I cancelled attempt <id> on my phone"); the server re-checks the provider first. */
+      supersedeAttemptId?: string;
+    },
+    options?: RequestOptions
+  ) => post<PaymentResult>('/payments/create', payload, options),
 
   /** `attemptId` pins the answer to one payment attempt, so a retry never shows an older attempt's result. */
-  paymentStatus: (orderId: string, attemptId?: string) =>
+  paymentStatus: (orderId: string, attemptId?: string, options?: RequestOptions) =>
     get<PaymentSyncResponse>(
-      `/payments/status/${encodeURIComponent(orderId)}${attemptId ? `?attempt=${encodeURIComponent(attemptId)}` : ''}`
+      `/payments/status/${encodeURIComponent(orderId)}${attemptId ? `?attempt=${encodeURIComponent(attemptId)}` : ''}`,
+      options
     ),
+
+  /** Deliberately keeps the default timeout and no owner signal: a dismissal must survive navigation. */
+  dismissPayment: (orderId: string, attemptId?: string) =>
+    post<PaymentSyncResponse>('/payments/dismiss', { orderId, attemptId }),
 };
 
 export interface AuthUser {

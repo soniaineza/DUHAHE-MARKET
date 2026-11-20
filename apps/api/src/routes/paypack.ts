@@ -1,7 +1,7 @@
 import { requireAdmin } from '../middleware/auth';
 import { Router } from 'express';
 import { config } from '../config';
-import { getTransaction, paypackReady, verifySignature } from '../services/paypackService';
+import { getTransaction, normalizeStatus, paypackReady, providerFailureReason, verifySignature } from '../services/paypackService';
 import { applyProviderOutcome, findByRef } from '../services/paymentAttempts';
 
 /**
@@ -62,9 +62,16 @@ paypackWebhookRouter.post('/paypack', async (req, res) => {
     return;
   }
 
-  const outcome =
-    status === 'successful' || status === 'success' ? 'successful' : status === 'failed' ? 'failed' : 'pending';
-  const effect = applyProviderOutcome(found.order, found.attempt, { status: outcome, amount: data?.amount ?? event?.amount });
+  const outcome = normalizeStatus(status);
+  if (!outcome) {
+    res.json({ received: true });
+    return;
+  }
+  const effect = applyProviderOutcome(found.order, found.attempt, {
+    status: outcome,
+    amount: data?.amount ?? event?.amount,
+    ...(outcome === 'failed' ? { reason: providerFailureReason(status) } : {}),
+  });
 
   res.json({
     received: true,
@@ -101,7 +108,7 @@ paypackWebhookRouter.post('/paypack/:ref/sync', requireAdmin, async (req, res) =
     res.json({ data: { ref: found.attempt.ref, attemptId: found.attempt.id, attemptStatus: found.attempt.status } });
     return;
   }
-  const effect = applyProviderOutcome(found.order, found.attempt, { status: tx.status, amount: tx.amount });
+  const effect = applyProviderOutcome(found.order, found.attempt, { status: tx.status, amount: tx.amount, reason: tx.reason });
   res.json({ data: { ref: found.attempt.ref, attemptId: found.attempt.id, attemptStatus: found.attempt.status, effect, status: tx.status } });
 });
 

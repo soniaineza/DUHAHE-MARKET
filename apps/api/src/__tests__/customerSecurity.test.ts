@@ -52,11 +52,13 @@ describe('payment ownership and login lockout', () => {
   it('payments need a login', async () => {
     assert.equal((await call('POST', '/payments/create', { body: { orderId: order.id, phone: '250788200001', amount: order.total } })).status, 401);
     assert.equal((await call('GET', `/payments/status/${order.id}`)).status, 401);
+    assert.equal((await call('POST', '/payments/dismiss', { body: { orderId: order.id } })).status, 401);
   });
 
   it("another customer cannot start a payment for, or read the status of, Alice's order", async () => {
     assert.equal((await call('POST', '/payments/create', { token: bob, body: { orderId: order.id, phone: '250788200002', amount: order.total } })).status, 404);
     assert.equal((await call('GET', `/payments/status/${order.id}`, { token: bob })).status, 404);
+    assert.equal((await call('POST', '/payments/dismiss', { token: bob, body: { orderId: order.id } })).status, 404);
     assert.equal((await call('GET', `/payments/status/${order.id}`, { token: alice })).status, 200);
   });
 
@@ -64,6 +66,7 @@ describe('payment ownership and login lockout', () => {
     const r = await call('POST', '/payments/create', { token: alice, body: { method: 'cash_on_delivery', orderId: order.id, phone: '250788200001', amount: order.total } });
     assert.notEqual(r.status, 401);
     assert.notEqual(r.status, 404);
+    assert.equal((await call('POST', '/payments/dismiss', { token: alice, body: { orderId: order.id } })).status, 200);
   });
 
   it('webhook sync and config are admin-only', async () => {

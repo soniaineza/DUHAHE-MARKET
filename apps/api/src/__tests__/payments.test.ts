@@ -28,7 +28,7 @@ process.env.DEMO_MODE = 'true';
 process.env.PAYMENT_RECHECK_FAILED_MS = '0'; // re-check older failed attempts on every call in tests
 
 const { orders, notifications, updateOrderPaymentStatus } = await import('../data/store');
-const { initiatePayment, syncOrderPayment, EARLY_RETRY_MIN_AGE_MS } = await import('../services/paymentService');
+const { initiatePayment, syncOrderPayment, dismissPayment, EARLY_RETRY_MIN_AGE_MS } = await import('../services/paymentService');
 const { paypackWebhookRouter } = await import('../routes/paypack');
 
 // ---------------------------------------------------------------------------------------- fake Paypack
@@ -483,20 +483,36 @@ describe('status outcomes', () => {
     assert.equal(paidNotifications(o), 1);
   });
 
-  for (const status of ['failed', 'rejected'] as const) {
-    it(`customer cancels/rejects (provider "${status}") -> cancelled, order unpaid-failed, polling stops`, async () => {
+  for (const [status, expectedStatus, expectedPhase] of [
+    ['failed', 'failed', 'failed'],
+    ['rejected', 'cancelled', 'cancelled'],
+  ] as const) {
+    it(`provider "${status}" -> ${expectedStatus}, order not paid, polling stops`, async () => {
       const o = makeOrder();
       await pay(o);
       fake.settle(att(o)[0].ref!, status);
       const s = await syncOrderPayment(o.id, att(o)[0].id);
-      assert.equal(s?.status, 'failed');
+      assert.equal(s?.status, expectedStatus);
+      assert.equal(o.paymentStatus, expectedStatus);
+      assert.equal(s?.providerStatus, 'failed');
       const d = decidePhase(s!, 3_000);
-      assert.deepEqual([d.phase, d.stopPolling], ['cancelled', true]);
+      assert.deepEqual([d.phase, d.stopPolling], [expectedPhase, true]);
       assert.equal(paidNotifications(o), 0);
     });
   }
 
-  it('never approved: stays pending, never "failed" by the clock; UI says unresolved after the long window', async () => {
+  it('a prompt cancelled on the phone and reported by webhook is cancelled, not failed', async () => {
+    const o = makeOrder();
+    await pay(o);
+    const r = await webhook(att(o)[0].ref!, 'cancelled', o.total);
+    assert.equal(r.body.effect, 'failed');
+    const s = await syncOrderPayment(o.id, att(o)[0].id);
+    assert.equal(s?.status, 'cancelled');
+    assert.equal(o.paymentStatus, 'cancelled');
+    assert.equal(decidePhase(s!, 3_000).phase, 'cancelled');
+  });
+
+  it('never approved: stays pending, never "failed" by the clock; UI says pending after the long window', async () => {
     const o = makeOrder();
     await pay(o);
     const s = await syncOrderPayment(o.id, att(o)[0].id);
@@ -504,15 +520,16 @@ describe('status outcomes', () => {
     assert.equal(o.paymentStatus, 'unpaid');
     const pending = { status: 'unpaid' as const, providerStatus: 'pending' as const };
     assert.equal(decidePhase(pending, UNRESOLVED_AFTER_MS - 1).phase, 'waiting');
-    assert.equal(decidePhase(pending, UNRESOLVED_AFTER_MS).phase, 'unresolved');
+    assert.equal(decidePhase(pending, UNRESOLVED_AFTER_MS).phase, 'pending');
   });
 
-  it('a final failure reported ~12 minutes later (dismissed prompt) is still picked up', async () => {
+  it('a final provider failure reported ~12 minutes later (dismissed prompt) is still picked up', async () => {
     const o = makeOrder();
     await pay(o);
     fake.settle(att(o)[0].ref!, 'failed');
     const s = await syncOrderPayment(o.id, att(o)[0].id);
-    assert.equal(decidePhase(s!, 12 * 60 * 1000).phase, 'cancelled');
+    assert.equal(s?.status, 'failed');
+    assert.equal(decidePhase(s!, 12 * 60 * 1000).phase, 'failed');
   });
 
   it('provider unreachable while waiting: "unavailable", order untouched, UI keeps waiting, recovers later', async () => {
@@ -834,5 +851,120 @@ describe('EARLY RETRY: "I cancelled it on my phone, retry now" (before the provi
     const poll = await syncOrderPayment(o.id, A2.id);
     assert.equal(poll?.status, 'paid');
     assert.equal(o.paymentStatus, 'paid');
+  });
+});
+
+describe('DISMISS: closing the phone prompt or leaving the payment screen', () => {
+  it('records customer intent, keeps the reference, and never sends a second payment request', async () => {
+    const o = makeOrder();
+    await pay(o);
+    const A1 = att(o)[0];
+    const calls = fake.cashinCalls.length;
+
+    const res = await dismissPayment(o.id, A1.id);
+    assert.equal(res?.dismissed, true);
+    assert.equal(res?.status, 'unpaid');
+    assert.equal(res?.providerStatus, 'pending');
+    assert.equal(res?.providerReference, A1.ref);
+    assert.equal(res?.attemptId, A1.id);
+    assert.ok(A1.dismissedAt);
+    assert.equal(A1.status, 'pending', 'the provider has not confirmed a cancellation');
+    assert.equal(o.paymentStatus, 'unpaid');
+    assert.equal(fake.cashinCalls.length, calls);
+    assert.equal(decidePhase(res!, 5_000).phase, 'dismissed');
+  });
+
+  for (const status of ['successful', 'failed'] as const) {
+    it(`checks the provider first: a late "${status}" wins over the dismissal label`, async () => {
+      const o = makeOrder();
+      await pay(o);
+      const A1 = att(o)[0];
+      fake.settle(A1.ref!, status);
+
+      const res = await dismissPayment(o.id, A1.id);
+      assert.equal(res?.dismissed, false);
+      assert.equal(res?.status, status === 'successful' ? 'paid' : 'failed');
+      assert.equal(A1.dismissedAt, undefined);
+      assert.equal(fake.cashinCalls.length, 1);
+      assert.equal(paidNotifications(o), status === 'successful' ? 1 : 0);
+    });
+  }
+
+  it('never reports a dismissal when the provider cannot be reached, but still records the customer intent', async () => {
+    const o = makeOrder();
+    await pay(o);
+    const A1 = att(o)[0];
+    fake.down = true;
+
+    const res = await dismissPayment(o.id, A1.id);
+    assert.equal(res?.unavailable, true);
+    assert.equal(res?.dismissed, false);
+    assert.ok(A1.dismissedAt);
+    const d = decidePhase(res!, 5_000);
+    assert.equal(d.phase, 'waiting');
+    assert.equal(d.degraded, true);
+  });
+
+  it('is idempotent and a later provider failure still wins', async () => {
+    const o = makeOrder();
+    await pay(o);
+    const A1 = att(o)[0];
+
+    await dismissPayment(o.id, A1.id);
+    const first = A1.dismissedAt;
+    await dismissPayment(o.id, A1.id);
+    assert.equal(A1.dismissedAt, first);
+
+    fake.settle(A1.ref!, 'failed');
+    const poll = await syncOrderPayment(o.id, A1.id);
+    assert.equal(poll?.status, 'failed');
+    assert.equal(poll?.providerStatus, 'failed');
+    assert.equal(A1.dismissedAt, first);
+    assert.equal(decidePhase(poll!, 3_000).phase, 'failed');
+  });
+
+  it('returning to the payment page resumes the same request instead of charging again', async () => {
+    const o = makeOrder();
+    await pay(o);
+    const A1 = att(o)[0];
+    await dismissPayment(o.id, A1.id);
+
+    const resumed = await pay(o);
+    assert.equal(resumed.attemptId, A1.id);
+    assert.equal(resumed.providerRequestId, A1.ref);
+    assert.equal(fake.cashinCalls.length, 1);
+    assert.equal(att(o).length, 1);
+
+    const poll = await syncOrderPayment(o.id, A1.id);
+    assert.equal(poll?.dismissed, true);
+    assert.equal(decidePhase(poll!, 5_000).phase, 'dismissed');
+  });
+
+  it('an explicit retry after a dismissal supersedes the old request, which is still tracked for late success', async () => {
+    const o = makeOrder();
+    await pay(o);
+    const A1 = att(o)[0];
+    await dismissPayment(o.id, A1.id);
+    A1.createdAt = new Date(Date.now() - (EARLY_RETRY_MIN_AGE_MS + 5_000)).toISOString();
+
+    const retry = await initiatePayment({ method: 'mtn_momo', orderId: o.id, phone: o.customer.phone, amount: o.total, supersedeAttemptId: A1.id });
+    assert.equal(retry.success, true);
+    const A2 = att(o)[1];
+    assert.ok(A1.dismissedAt);
+    assert.ok(A1.supersededAt);
+    assert.equal(A1.status, 'pending');
+    assert.equal(A2.status, 'pending');
+    assert.equal(fake.cashinCalls.length, 2);
+
+    fake.settle(A2.ref!, 'successful');
+    const first = await webhook(A2.ref!, 'successful', o.total);
+    assert.equal(first.body.effect, 'paid');
+
+    fake.settle(A1.ref!, 'successful');
+    const late = await webhook(A1.ref!, 'successful', o.total);
+    assert.equal(late.body.effect, 'duplicate_charge');
+    assert.equal(o.paymentStatus, 'paid');
+    assert.equal(paidNotifications(o), 1);
+    assert.equal(o.paymentIssues?.[0].attemptId, A1.id);
   });
 });
