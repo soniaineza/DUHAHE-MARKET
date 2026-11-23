@@ -56,7 +56,7 @@ export default function Layout() {
         <div className="px-5 py-6 border-b border-white/10">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-20 items-center justify-center rounded-xl bg-white px-1.5">
-              <img src="/logo-emblem.png" alt="Duhahe" className="w-full h-full object-contain" />
+              <img src="/logo.jpeg" alt="Duhahe" className="w-full h-full object-contain" />
             </div>
             <div>
               <div className="text-lg font-black tracking-tight leading-none">Duhahe</div>
@@ -123,7 +123,7 @@ export default function Layout() {
         <div className="lg:hidden sticky top-0 z-20 bg-leaf-900 text-white flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-16 items-center justify-center rounded-lg bg-white px-1">
-              <img src="/logo-emblem.png" alt="Duhahe" className="w-full h-full object-contain" />
+              <img src="/logo.jpeg" alt="Duhahe" className="w-full h-full object-contain" />
             </div>
             <span className="text-sm font-bold">Duhahe</span>
           </div>

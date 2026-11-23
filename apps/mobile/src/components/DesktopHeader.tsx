@@ -41,7 +41,7 @@ export default function DesktopHeader({ active, go, open }: Props) {
     <View style={styles.bar}>
       <View style={styles.inner}>
         <Pressable onPress={() => go('Home')} style={styles.brand} accessibilityRole="link" accessibilityLabel={t('about.brand')}>
-          <Image source={require('../../assets/logo-emblem.png')} style={styles.pin} resizeMode="contain" accessibilityLabel="Duhahe Rwanda Market" />
+          <Image source={require('../../assets/logo.jpeg')} style={styles.pin} resizeMode="contain" accessibilityLabel="Duhahe Rwanda Market" />
           <View style={styles.brandText}>
             <Text style={styles.brandName} numberOfLines={1}>{wide ? t('about.brand') : 'Duhahe'}</Text>
             {wide ? (
